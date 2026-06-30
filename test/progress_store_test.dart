@@ -3,6 +3,7 @@ import 'package:japan_driver/models/answer_choice.dart';
 import 'package:japan_driver/models/practice_draft.dart';
 import 'package:japan_driver/models/practice_record.dart';
 import 'package:japan_driver/models/progress_store.dart';
+import 'package:japan_driver/models/question_comment.dart';
 
 void main() {
   test('moves a question out of wrong review after a correct answer', () {
@@ -103,5 +104,39 @@ void main() {
     expect(record.correctCount, 1);
     expect(record.wrongCount, 1);
     expect(record.answers.last.correctAnswer, AnswerChoice.cross);
+  });
+
+  test('stores comments independently for each question', () {
+    final store = ProgressStore.empty()
+        .addComment(
+          QuestionComment(
+            id: 'comment-1',
+            questionId: 'q1',
+            text: '標識の位置に注意',
+            authorLabel: 'テスト',
+            createdAt: DateTime.utc(2026, 6, 30, 13),
+          ),
+        )
+        .addComment(
+          QuestionComment(
+            id: 'comment-2',
+            questionId: 'q2',
+            text: '別の問題のコメント',
+            authorLabel: 'ゲスト',
+            createdAt: DateTime.utc(2026, 6, 30, 14),
+          ),
+        );
+
+    final decoded = ProgressStore.decode(store.encode());
+
+    expect(decoded.commentsByQuestion['q1']?.single.text, '標識の位置に注意');
+    expect(decoded.commentsByQuestion['q2']?.single.id, 'comment-2');
+
+    final removed = decoded.removeComment(
+      questionId: 'q1',
+      commentId: 'comment-1',
+    );
+    expect(removed.commentsByQuestion, isNot(contains('q1')));
+    expect(removed.commentsByQuestion['q2'], hasLength(1));
   });
 }

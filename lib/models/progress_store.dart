@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'answer_choice.dart';
 import 'practice_draft.dart';
 import 'practice_record.dart';
+import 'question_comment.dart';
 
 class QuestionProgress {
   const QuestionProgress({
@@ -57,14 +58,20 @@ class ProgressStore {
     required this.byQuestion,
     required this.drafts,
     required this.records,
+    required this.commentsByQuestion,
   });
 
   final Map<String, QuestionProgress> byQuestion;
   final Map<String, PracticeDraft> drafts;
   final List<PracticeRecord> records;
+  final Map<String, List<QuestionComment>> commentsByQuestion;
 
-  factory ProgressStore.empty() =>
-      const ProgressStore(byQuestion: {}, drafts: {}, records: []);
+  factory ProgressStore.empty() => const ProgressStore(
+    byQuestion: {},
+    drafts: {},
+    records: [],
+    commentsByQuestion: {},
+  );
 
   int get answeredQuestionCount => byQuestion.length;
 
@@ -117,6 +124,7 @@ class ProgressStore {
       byQuestion: {...byQuestion, questionId: next},
       drafts: drafts,
       records: records,
+      commentsByQuestion: commentsByQuestion,
     );
   }
 
@@ -125,6 +133,7 @@ class ProgressStore {
       byQuestion: byQuestion,
       drafts: {...drafts, draft.sessionId: draft},
       records: records,
+      commentsByQuestion: commentsByQuestion,
     );
   }
 
@@ -134,6 +143,7 @@ class ProgressStore {
       byQuestion: byQuestion,
       drafts: nextDrafts,
       records: records,
+      commentsByQuestion: commentsByQuestion,
     );
   }
 
@@ -142,6 +152,47 @@ class ProgressStore {
       byQuestion: byQuestion,
       drafts: drafts,
       records: [record, ...records].take(200).toList(growable: false),
+      commentsByQuestion: commentsByQuestion,
+    );
+  }
+
+  ProgressStore addComment(QuestionComment comment) {
+    final comments = commentsByQuestion[comment.questionId] ?? const [];
+    return ProgressStore(
+      byQuestion: byQuestion,
+      drafts: drafts,
+      records: records,
+      commentsByQuestion: {
+        ...commentsByQuestion,
+        comment.questionId: [...comments, comment],
+      },
+    );
+  }
+
+  ProgressStore removeComment({
+    required String questionId,
+    required String commentId,
+  }) {
+    final nextComments = Map<String, List<QuestionComment>>.of(
+      commentsByQuestion,
+    );
+    final comments = nextComments[questionId];
+    if (comments == null) {
+      return this;
+    }
+    final remaining = comments
+        .where((comment) => comment.id != commentId)
+        .toList(growable: false);
+    if (remaining.isEmpty) {
+      nextComments.remove(questionId);
+    } else {
+      nextComments[questionId] = remaining;
+    }
+    return ProgressStore(
+      byQuestion: byQuestion,
+      drafts: drafts,
+      records: records,
+      commentsByQuestion: nextComments,
     );
   }
 
@@ -149,7 +200,7 @@ class ProgressStore {
 
   Map<String, Object?> toJson() {
     return {
-      'version': 1,
+      'version': 2,
       'questions': {
         for (final entry in byQuestion.entries) entry.key: entry.value.toJson(),
       },
@@ -157,6 +208,10 @@ class ProgressStore {
         for (final entry in drafts.entries) entry.key: entry.value.toJson(),
       },
       'records': [for (final record in records) record.toJson()],
+      'comments': {
+        for (final entry in commentsByQuestion.entries)
+          entry.key: [for (final comment in entry.value) comment.toJson()],
+      },
     };
   }
 
@@ -169,18 +224,17 @@ class ProgressStore {
       return ProgressStore.empty();
     }
     final questions = decoded['questions'];
-    if (questions is! Map) {
-      return ProgressStore.empty();
-    }
     final drafts = decoded['drafts'];
     final records = decoded['records'];
+    final comments = decoded['comments'];
     return ProgressStore(
       byQuestion: {
-        for (final entry in questions.entries)
-          if (entry.key is String && entry.value is Map)
-            entry.key as String: QuestionProgress.fromJson(
-              (entry.value as Map).cast<String, Object?>(),
-            ),
+        if (questions is Map)
+          for (final entry in questions.entries)
+            if (entry.key is String && entry.value is Map)
+              entry.key as String: QuestionProgress.fromJson(
+                (entry.value as Map).cast<String, Object?>(),
+              ),
       },
       drafts: {
         if (drafts is Map)
@@ -196,6 +250,16 @@ class ProgressStore {
             if (record is Map)
               PracticeRecord.fromJson(record.cast<String, Object?>()),
       ],
+      commentsByQuestion: {
+        if (comments is Map)
+          for (final entry in comments.entries)
+            if (entry.key is String && entry.value is List)
+              entry.key as String: [
+                for (final comment in entry.value as List)
+                  if (comment is Map)
+                    QuestionComment.fromJson(comment.cast<String, Object?>()),
+              ],
+      },
     );
   }
 }

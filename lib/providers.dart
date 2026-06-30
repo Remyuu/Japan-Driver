@@ -1,14 +1,25 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'models/answer_choice.dart';
+import 'models/account_user.dart';
 import 'models/app_settings.dart';
 import 'models/practice_draft.dart';
 import 'models/practice_record.dart';
 import 'models/progress_store.dart';
 import 'models/question_bank.dart';
+import 'models/question_comment.dart';
+import 'repositories/account_repository.dart';
 import 'repositories/progress_repository.dart';
 import 'repositories/question_repository.dart';
 import 'repositories/settings_repository.dart';
+
+final accountRepositoryProvider = Provider<AccountRepository>((ref) {
+  return const AccountRepository();
+});
+
+final accountUserProvider = StreamProvider<AccountUser?>((ref) {
+  return ref.watch(accountRepositoryProvider).authStateChanges();
+});
 
 final questionRepositoryProvider = Provider<QuestionRepository>((ref) {
   return const QuestionRepository();
@@ -101,6 +112,41 @@ class ProgressController extends AsyncNotifier<ProgressStore> {
   Future<void> saveRecord(PracticeRecord record) async {
     final current = state.value ?? ProgressStore.empty();
     final next = current.addRecord(record);
+    state = AsyncData(next);
+    await ref.watch(progressRepositoryProvider).save(next);
+  }
+
+  Future<void> addComment({
+    required String questionId,
+    required String text,
+    required String authorLabel,
+    String? authorId,
+  }) async {
+    final createdAt = DateTime.now();
+    final current = state.value ?? ProgressStore.empty();
+    final next = current.addComment(
+      QuestionComment(
+        id: '$questionId|${createdAt.microsecondsSinceEpoch}',
+        questionId: questionId,
+        text: text,
+        authorLabel: authorLabel,
+        authorId: authorId,
+        createdAt: createdAt,
+      ),
+    );
+    state = AsyncData(next);
+    await ref.watch(progressRepositoryProvider).save(next);
+  }
+
+  Future<void> removeComment({
+    required String questionId,
+    required String commentId,
+  }) async {
+    final current = state.value ?? ProgressStore.empty();
+    final next = current.removeComment(
+      questionId: questionId,
+      commentId: commentId,
+    );
     state = AsyncData(next);
     await ref.watch(progressRepositoryProvider).save(next);
   }

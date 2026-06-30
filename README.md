@@ -1,47 +1,32 @@
 # Japan Driver
 
-Flutter Web app for local Japanese driving-license question practice.
+面向日本驾照学科考试的在线练习工具，覆盖仮免前与卒検前两个学习阶段。
 
-## Current Scope
+[在线使用](https://remoooo.com/jp-driver/) · [开发文档](docs/development.md)
 
-- Web-first Flutter app; mobile and desktop code paths are kept reusable.
-- Bundled local MUSASI scrape data from `scraped/`.
-- Japanese UI with ruby/furigana rendering for question and explanation text.
-- Local browser progress via `shared_preferences`.
-- No account system, sync, question editing, or audio playback in v1.
+## 产品介绍
 
-The bundled scraped questions, images, and remote audio URLs are for private validation. Confirm content rights before any public release.
+Japan Driver 将驾照学科题库整理为适合日常练习的 Web 应用。你可以按考试阶段、练习方式或教材章节选择题目，在答题后查看解析，并持续追踪自己的完成度与薄弱项目。
 
-## Run
+## 主要功能
 
-Flutter SDK was installed at:
+- **分阶段备考**：分别提供仮免前与卒検前题目。
+- **多种练习方式**：支持一问一答、考试形式、按项目练习和高频易错题。
+- **日语阅读辅助**：题目与解析支持假名标注、配图和教材出处。
+- **学习进度统计**：查看已回答题数、正答率、错误数和各题库完成度。
+- **错题与答题记录**：保留练习结果，方便回看答案与解析。
+- **题目笔记**：可以为单道题添加自己的备注。
+- **Google 账号**：支持使用 Google 账号注册和登录。
+- **多端适配**：可在电脑和手机浏览器中使用。
 
-```bash
-/Users/remosama/development/flutter/bin/flutter
-```
+## 开始使用
 
-Run the Web app:
+打开 [Japan Driver](https://remoooo.com/jp-driver/)，选择当前备考阶段和练习方式即可开始答题。
 
-```bash
-/Users/remosama/development/flutter/bin/flutter run -d chrome
-```
+目前学习进度、答题记录和题目笔记保存在当前浏览器中。清除网站数据或更换设备时，这些记录不会自动同步。
 
-Build the Web app:
+## 项目状态
 
-```bash
-/Users/remosama/development/flutter/bin/flutter build web
-```
+产品仍在持续完善中。当前版本优先提供 Web 端的题目练习、记录与统计体验。
 
-Serve a built release locally:
-
-```bash
-python3 -m http.server 8787 --directory build/web
-```
-
-## Verify
-
-```bash
-/Users/remosama/development/flutter/bin/flutter analyze
-/Users/remosama/development/flutter/bin/flutter test
-/Users/remosama/development/flutter/bin/flutter build web
-```
+题库、图片与音频内容目前仅用于产品验证；公开使用前应确认相关内容授权。

@@ -36,6 +36,9 @@ migrate_working_dir/
 # Local question bank data
 /scraped/
 
+# Local deployment configuration
+/.firebase-config.json
+
 # Symbolication related
 app.*.symbols
 

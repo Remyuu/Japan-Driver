@@ -10,6 +10,7 @@ import '../models/practice_draft.dart';
 import '../models/practice_record.dart';
 import '../models/progress_store.dart';
 import '../models/question_bank.dart';
+import '../models/question_comment.dart';
 import '../navigation_transitions.dart';
 import '../providers.dart';
 import '../widgets/ruby_text.dart';
@@ -26,6 +27,8 @@ enum PracticeFeedbackMode {
 }
 
 enum _ExitAction { save, discard, cancel }
+
+enum _PracticeDetailMode { explanation, comments }
 
 class PracticeScreen extends ConsumerWidget {
   const PracticeScreen({
@@ -206,6 +209,7 @@ class _QuestionPracticeRunnerState
   bool _practiceRecordSaved = false;
   Timer? _timer;
   int? _remainingSeconds;
+  _PracticeDetailMode _detailMode = _PracticeDetailMode.explanation;
 
   @override
   void initState() {
@@ -530,6 +534,11 @@ class _QuestionPracticeRunnerState
     final selectedAnswer = _selectedAnswers[_index];
     final settings =
         ref.watch(settingsControllerProvider).value ?? AppSettings.defaults();
+    final progress =
+        ref.watch(progressControllerProvider).value ?? ProgressStore.empty();
+    final commentCount = question == null
+        ? 0
+        : progress.commentsByQuestion[question.canonicalId]?.length ?? 0;
 
     return Scaffold(
       appBar: AppBar(
@@ -555,47 +564,62 @@ class _QuestionPracticeRunnerState
               builder: (context, constraints) {
                 final isWide = constraints.maxWidth >= 960;
                 final content = isWide
-                    ? Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(
-                            child: _QuestionPanel(
-                              question: question,
-                              title: widget.subtitle,
-                              index: _index,
-                              total: widget.questions.length,
-                              selectedAnswer: selectedAnswer,
-                              revealAnswer: _revealAnswer,
-                              showRuby: settings.showRuby,
-                              canChangeAnswer:
-                                  !_examSubmitted &&
-                                  widget.feedbackMode ==
-                                      PracticeFeedbackMode.exam,
-                              canGoNext: _canGoNext,
-                              nextLabel: _nextLabel,
-                              onChoose: (choice) => _choose(question, choice),
-                              onPrevious: _previous,
-                              onNext: () => _next(),
-                            ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: _QuestionPanel(
+                                  question: question,
+                                  title: widget.subtitle,
+                                  index: _index,
+                                  total: widget.questions.length,
+                                  selectedAnswer: selectedAnswer,
+                                  revealAnswer: _revealAnswer,
+                                  showRuby: settings.showRuby,
+                                  canChangeAnswer:
+                                      !_examSubmitted &&
+                                      widget.feedbackMode ==
+                                          PracticeFeedbackMode.exam,
+                                  canGoNext: _canGoNext,
+                                  nextLabel: _nextLabel,
+                                  onChoose: (choice) =>
+                                      _choose(question, choice),
+                                  onPrevious: _previous,
+                                  onNext: () => _next(),
+                                ),
+                              ),
+                              const SizedBox(width: 20),
+                              SizedBox(
+                                width: 340,
+                                child: _SidePanel(
+                                  question: question,
+                                  selectedAnswer: selectedAnswer,
+                                  revealAnswer: _revealAnswer,
+                                  showRuby: settings.showRuby,
+                                  examSummary: _examSubmitted
+                                      ? '結果 $_correctCount / ${widget.questions.length}'
+                                      : null,
+                                  index: _index,
+                                  total: widget.questions.length,
+                                  detailMode: _detailMode,
+                                  commentCount: commentCount,
+                                  onDetailModeChanged: (mode) {
+                                    setState(() => _detailMode = mode);
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 20),
-                          SizedBox(
-                            width: 320,
-                            child: _SidePanel(
-                              question: question,
-                              selectedAnswer: selectedAnswer,
-                              revealAnswer: _revealAnswer,
-                              showRuby: settings.showRuby,
-                              examSummary: _examSubmitted
-                                  ? '結果 $_correctCount / ${widget.questions.length}'
-                                  : null,
-                              answers: _selectedAnswers,
-                              questions: widget.questions,
-                              index: _index,
-                              total: widget.questions.length,
-                              onJumpToQuestion: _jumpToQuestion,
-                              onNext: () => _next(),
-                            ),
+                          const SizedBox(height: 12),
+                          _AnswerSheetCard(
+                            questions: widget.questions,
+                            answers: _selectedAnswers,
+                            currentIndex: _index,
+                            revealAnswer: _revealAnswer,
+                            onJumpToQuestion: _jumpToQuestion,
                           ),
                         ],
                       )
@@ -621,14 +645,6 @@ class _QuestionPracticeRunnerState
                             onNext: () => _next(),
                           ),
                           const SizedBox(height: 12),
-                          _AnswerSheetCard(
-                            questions: widget.questions,
-                            answers: _selectedAnswers,
-                            currentIndex: _index,
-                            revealAnswer: _revealAnswer,
-                            onJumpToQuestion: _jumpToQuestion,
-                          ),
-                          const SizedBox(height: 12),
                           if (_examSubmitted) ...[
                             _ExamSummaryCard(
                               text:
@@ -636,12 +652,24 @@ class _QuestionPracticeRunnerState
                             ),
                             const SizedBox(height: 12),
                           ],
-                          _ResultPanel(
+                          _QuestionDetailPanel(
                             question: question,
                             selectedAnswer: selectedAnswer,
                             revealAnswer: _revealAnswer,
                             showRuby: settings.showRuby,
-                            onNext: () => _next(),
+                            mode: _detailMode,
+                            commentCount: commentCount,
+                            onModeChanged: (mode) {
+                              setState(() => _detailMode = mode);
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _AnswerSheetCard(
+                            questions: widget.questions,
+                            answers: _selectedAnswers,
+                            currentIndex: _index,
+                            revealAnswer: _revealAnswer,
+                            onJumpToQuestion: _jumpToQuestion,
                           ),
                         ],
                       );
@@ -865,12 +893,11 @@ class _SidePanel extends StatelessWidget {
     required this.revealAnswer,
     required this.showRuby,
     required this.examSummary,
-    required this.answers,
-    required this.questions,
     required this.index,
     required this.total,
-    required this.onJumpToQuestion,
-    required this.onNext,
+    required this.detailMode,
+    required this.commentCount,
+    required this.onDetailModeChanged,
   });
 
   final DriverQuestion question;
@@ -878,12 +905,11 @@ class _SidePanel extends StatelessWidget {
   final bool revealAnswer;
   final bool showRuby;
   final String? examSummary;
-  final Map<int, AnswerChoice> answers;
-  final List<DriverQuestion> questions;
   final int index;
   final int total;
-  final ValueChanged<int> onJumpToQuestion;
-  final VoidCallback onNext;
+  final _PracticeDetailMode detailMode;
+  final int commentCount;
+  final ValueChanged<_PracticeDetailMode> onDetailModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -917,25 +943,76 @@ class _SidePanel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        _AnswerSheetCard(
-          questions: questions,
-          answers: answers,
-          currentIndex: index,
-          revealAnswer: revealAnswer,
-          onJumpToQuestion: onJumpToQuestion,
-        ),
-        const SizedBox(height: 12),
         if (examSummary != null) ...[
           _ExamSummaryCard(text: examSummary!),
           const SizedBox(height: 12),
         ],
-        _ResultPanel(
+        _QuestionDetailPanel(
           question: question,
           selectedAnswer: selectedAnswer,
           revealAnswer: revealAnswer,
           showRuby: showRuby,
-          onNext: onNext,
+          mode: detailMode,
+          commentCount: commentCount,
+          onModeChanged: onDetailModeChanged,
         ),
+      ],
+    );
+  }
+}
+
+class _QuestionDetailPanel extends StatelessWidget {
+  const _QuestionDetailPanel({
+    required this.question,
+    required this.selectedAnswer,
+    required this.revealAnswer,
+    required this.showRuby,
+    required this.mode,
+    required this.commentCount,
+    required this.onModeChanged,
+  });
+
+  final DriverQuestion question;
+  final AnswerChoice? selectedAnswer;
+  final bool revealAnswer;
+  final bool showRuby;
+  final _PracticeDetailMode mode;
+  final int commentCount;
+  final ValueChanged<_PracticeDetailMode> onModeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SegmentedButton<_PracticeDetailMode>(
+          segments: [
+            const ButtonSegment(
+              value: _PracticeDetailMode.explanation,
+              icon: Icon(Icons.menu_book_outlined),
+              label: Text('解説'),
+            ),
+            ButtonSegment(
+              value: _PracticeDetailMode.comments,
+              icon: const Icon(Icons.mode_comment_outlined),
+              label: Text('コメント $commentCount'),
+            ),
+          ],
+          selected: {mode},
+          onSelectionChanged: (selection) {
+            onModeChanged(selection.single);
+          },
+        ),
+        const SizedBox(height: 12),
+        if (mode == _PracticeDetailMode.explanation)
+          _ResultPanel(
+            question: question,
+            selectedAnswer: selectedAnswer,
+            revealAnswer: revealAnswer,
+            showRuby: showRuby,
+          )
+        else
+          _CommentPanel(questionId: question.canonicalId),
       ],
     );
   }
@@ -947,14 +1024,12 @@ class _ResultPanel extends StatelessWidget {
     required this.selectedAnswer,
     required this.revealAnswer,
     required this.showRuby,
-    required this.onNext,
   });
 
   final DriverQuestion question;
   final AnswerChoice? selectedAnswer;
   final bool revealAnswer;
   final bool showRuby;
-  final VoidCallback onNext;
 
   @override
   Widget build(BuildContext context) {
@@ -1051,6 +1126,191 @@ class _ResultPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CommentPanel extends ConsumerStatefulWidget {
+  const _CommentPanel({required this.questionId});
+
+  final String questionId;
+
+  @override
+  ConsumerState<_CommentPanel> createState() => _CommentPanelState();
+}
+
+class _CommentPanelState extends ConsumerState<_CommentPanel> {
+  final TextEditingController _controller = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void didUpdateWidget(covariant _CommentPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.questionId != widget.questionId) {
+      _controller.clear();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addComment() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty || _saving) {
+      return;
+    }
+    final user = ref.read(accountUserProvider).value;
+    setState(() => _saving = true);
+    await ref
+        .read(progressControllerProvider.notifier)
+        .addComment(
+          questionId: widget.questionId,
+          text: text,
+          authorLabel: user?.label ?? 'ゲスト',
+          authorId: user?.id,
+        );
+    if (!mounted) {
+      return;
+    }
+    _controller.clear();
+    setState(() => _saving = false);
+  }
+
+  Future<void> _removeComment(QuestionComment comment) async {
+    await ref
+        .read(progressControllerProvider.notifier)
+        .removeComment(questionId: widget.questionId, commentId: comment.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final comments =
+        ref
+            .watch(progressControllerProvider)
+            .value
+            ?.commentsByQuestion[widget.questionId] ??
+        const <QuestionComment>[];
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (comments.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(
+                  'コメントはまだありません',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              )
+            else
+              for (var i = 0; i < comments.length; i += 1) ...[
+                _CommentItem(
+                  comment: comments[i],
+                  onDelete: () => _removeComment(comments[i]),
+                ),
+                if (i != comments.length - 1)
+                  const Divider(height: 24, color: Color(0xFFE3E1DC)),
+              ],
+            if (comments.isNotEmpty) const SizedBox(height: 16),
+            TextField(
+              controller: _controller,
+              minLines: 2,
+              maxLines: 5,
+              maxLength: 500,
+              textInputAction: TextInputAction.newline,
+              decoration: const InputDecoration(
+                labelText: 'コメント',
+                hintText: 'コメントを入力',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                onPressed: _controller.text.trim().isEmpty || _saving
+                    ? null
+                    : _addComment,
+                icon: _saving
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send_rounded),
+                label: const Text('投稿'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CommentItem extends StatelessWidget {
+  const _CommentItem({required this.comment, required this.onDelete});
+
+  final QuestionComment comment;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: 16,
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+          child: const Icon(Icons.person_outline_rounded, size: 18),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      comment.authorLabel,
+                      style: Theme.of(context).textTheme.labelLarge,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Text(
+                    _formatCommentTime(comment.createdAt),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              Text(comment.text),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: '削除',
+          onPressed: onDelete,
+          icon: const Icon(Icons.delete_outline_rounded),
+          visualDensity: VisualDensity.compact,
+        ),
+      ],
+    );
+  }
+}
+
+String _formatCommentTime(DateTime value) {
+  final local = value.toLocal();
+  final month = local.month.toString().padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$month/$day $hour:$minute';
 }
 
 class _ExamSummaryCard extends StatelessWidget {
