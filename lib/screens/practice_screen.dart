@@ -11,8 +11,10 @@ import '../models/practice_record.dart';
 import '../models/progress_store.dart';
 import '../models/question_bank.dart';
 import '../models/question_comment.dart';
+import '../models/question_translation.dart';
 import '../navigation_transitions.dart';
 import '../providers.dart';
+import '../repositories/translation_repository.dart';
 import '../widgets/ruby_text.dart';
 
 enum PracticeFeedbackMode {
@@ -29,6 +31,39 @@ enum PracticeFeedbackMode {
 enum _ExitAction { save, discard, cancel }
 
 enum _PracticeDetailMode { explanation, comments }
+
+class _TranslationState {
+  const _TranslationState({
+    required this.value,
+    required this.isLoading,
+    required this.error,
+  });
+
+  final QuestionTranslation value;
+  final bool isLoading;
+  final Object? error;
+
+  factory _TranslationState.fromQuestion(DriverQuestion? question) {
+    return _TranslationState(
+      value: QuestionTranslation(
+        question: question?.questionChinese,
+        explanation: question?.explanationChinese,
+      ),
+      isLoading: false,
+      error: null,
+    );
+  }
+
+  _TranslationState withAsync(
+    AsyncValue<QuestionTranslation?> translationAsync,
+  ) {
+    return _TranslationState(
+      value: value.merge(translationAsync.value),
+      isLoading: translationAsync.isLoading,
+      error: translationAsync.error,
+    );
+  }
+}
 
 class PracticeScreen extends ConsumerWidget {
   const PracticeScreen({
@@ -539,6 +574,18 @@ class _QuestionPracticeRunnerState
     final commentCount = question == null
         ? 0
         : progress.commentsByQuestion[question.canonicalId]?.length ?? 0;
+    var translationState = _TranslationState.fromQuestion(question);
+    QuestionTranslationLookup? translationLookup;
+    if (question != null && settings.showChinese) {
+      translationLookup = (question: question, generateIfMissing: true);
+      final translationAsync = ref.watch(
+        questionTranslationProvider(translationLookup),
+      );
+      translationState = translationState.withAsync(translationAsync);
+    }
+    final retryTranslation = translationLookup == null
+        ? null
+        : () => ref.invalidate(questionTranslationProvider(translationLookup!));
 
     return Scaffold(
       appBar: AppBar(
@@ -579,6 +626,9 @@ class _QuestionPracticeRunnerState
                                   selectedAnswer: selectedAnswer,
                                   revealAnswer: _revealAnswer,
                                   showRuby: settings.showRuby,
+                                  showChinese: settings.showChinese,
+                                  translation: translationState,
+                                  onRetryTranslation: retryTranslation,
                                   canChangeAnswer:
                                       !_examSubmitted &&
                                       widget.feedbackMode ==
@@ -599,6 +649,9 @@ class _QuestionPracticeRunnerState
                                   selectedAnswer: selectedAnswer,
                                   revealAnswer: _revealAnswer,
                                   showRuby: settings.showRuby,
+                                  showChinese: settings.showChinese,
+                                  translation: translationState,
+                                  onRetryTranslation: retryTranslation,
                                   examSummary: _examSubmitted
                                       ? '結果 $_correctCount / ${widget.questions.length}'
                                       : null,
@@ -634,6 +687,9 @@ class _QuestionPracticeRunnerState
                             selectedAnswer: selectedAnswer,
                             revealAnswer: _revealAnswer,
                             showRuby: settings.showRuby,
+                            showChinese: settings.showChinese,
+                            translation: translationState,
+                            onRetryTranslation: retryTranslation,
                             canChangeAnswer:
                                 !_examSubmitted &&
                                 widget.feedbackMode ==
@@ -657,6 +713,9 @@ class _QuestionPracticeRunnerState
                             selectedAnswer: selectedAnswer,
                             revealAnswer: _revealAnswer,
                             showRuby: settings.showRuby,
+                            showChinese: settings.showChinese,
+                            translation: translationState,
+                            onRetryTranslation: retryTranslation,
                             mode: _detailMode,
                             commentCount: commentCount,
                             onModeChanged: (mode) {
@@ -698,6 +757,9 @@ class _QuestionPanel extends StatelessWidget {
     required this.selectedAnswer,
     required this.revealAnswer,
     required this.showRuby,
+    required this.showChinese,
+    required this.translation,
+    required this.onRetryTranslation,
     required this.canChangeAnswer,
     required this.canGoNext,
     required this.nextLabel,
@@ -713,6 +775,9 @@ class _QuestionPanel extends StatelessWidget {
   final AnswerChoice? selectedAnswer;
   final bool revealAnswer;
   final bool showRuby;
+  final bool showChinese;
+  final _TranslationState translation;
+  final VoidCallback? onRetryTranslation;
   final bool canChangeAnswer;
   final bool canGoNext;
   final String nextLabel;
@@ -748,6 +813,15 @@ class _QuestionPanel extends StatelessWidget {
                 letterSpacing: 0,
               ),
             ),
+            if (showChinese) ...[
+              const SizedBox(height: 14),
+              _ChineseTranslation(
+                text: translation.value.question,
+                isLoading: translation.isLoading,
+                error: translation.error,
+                onRetry: onRetryTranslation,
+              ),
+            ],
             if (question.questionImageAssetPaths.isNotEmpty) ...[
               const SizedBox(height: 20),
               _ImageList(paths: question.questionImageAssetPaths),
@@ -886,12 +960,87 @@ class _AnswerButton extends StatelessWidget {
   }
 }
 
+class _ChineseTranslation extends StatelessWidget {
+  const _ChineseTranslation({
+    required this.text,
+    required this.isLoading,
+    required this.error,
+    required this.onRetry,
+  });
+
+  final String? text;
+  final bool isLoading;
+  final Object? error;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(8),
+        border: Border(
+          left: BorderSide(color: colorScheme.secondary, width: 3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '中文',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSecondaryContainer,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (text != null)
+            Text(text!, style: Theme.of(context).textTheme.bodyLarge)
+          else if (isLoading)
+            const Row(
+              children: [
+                SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 10),
+                Expanded(child: Text('正在调用 Google 翻译…')),
+              ],
+            )
+          else ...[
+            Text(
+              error is TranslationNotConfiguredException
+                  ? '现场翻译尚未配置'
+                  : '中文翻译暂时失败，请稍后重试',
+            ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('重试'),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _SidePanel extends StatelessWidget {
   const _SidePanel({
     required this.question,
     required this.selectedAnswer,
     required this.revealAnswer,
     required this.showRuby,
+    required this.showChinese,
+    required this.translation,
+    required this.onRetryTranslation,
     required this.examSummary,
     required this.index,
     required this.total,
@@ -904,6 +1053,9 @@ class _SidePanel extends StatelessWidget {
   final AnswerChoice? selectedAnswer;
   final bool revealAnswer;
   final bool showRuby;
+  final bool showChinese;
+  final _TranslationState translation;
+  final VoidCallback? onRetryTranslation;
   final String? examSummary;
   final int index;
   final int total;
@@ -952,6 +1104,9 @@ class _SidePanel extends StatelessWidget {
           selectedAnswer: selectedAnswer,
           revealAnswer: revealAnswer,
           showRuby: showRuby,
+          showChinese: showChinese,
+          translation: translation,
+          onRetryTranslation: onRetryTranslation,
           mode: detailMode,
           commentCount: commentCount,
           onModeChanged: onDetailModeChanged,
@@ -967,6 +1122,9 @@ class _QuestionDetailPanel extends StatelessWidget {
     required this.selectedAnswer,
     required this.revealAnswer,
     required this.showRuby,
+    required this.showChinese,
+    required this.translation,
+    required this.onRetryTranslation,
     required this.mode,
     required this.commentCount,
     required this.onModeChanged,
@@ -976,6 +1134,9 @@ class _QuestionDetailPanel extends StatelessWidget {
   final AnswerChoice? selectedAnswer;
   final bool revealAnswer;
   final bool showRuby;
+  final bool showChinese;
+  final _TranslationState translation;
+  final VoidCallback? onRetryTranslation;
   final _PracticeDetailMode mode;
   final int commentCount;
   final ValueChanged<_PracticeDetailMode> onModeChanged;
@@ -1010,6 +1171,9 @@ class _QuestionDetailPanel extends StatelessWidget {
             selectedAnswer: selectedAnswer,
             revealAnswer: revealAnswer,
             showRuby: showRuby,
+            showChinese: showChinese,
+            translation: translation,
+            onRetryTranslation: onRetryTranslation,
           )
         else
           _CommentPanel(questionId: question.canonicalId),
@@ -1024,12 +1188,18 @@ class _ResultPanel extends StatelessWidget {
     required this.selectedAnswer,
     required this.revealAnswer,
     required this.showRuby,
+    required this.showChinese,
+    required this.translation,
+    required this.onRetryTranslation,
   });
 
   final DriverQuestion question;
   final AnswerChoice? selectedAnswer;
   final bool revealAnswer;
   final bool showRuby;
+  final bool showChinese;
+  final _TranslationState translation;
+  final VoidCallback? onRetryTranslation;
 
   @override
   Widget build(BuildContext context) {
@@ -1097,6 +1267,15 @@ class _ResultPanel extends StatelessWidget {
                 rubyHtml: question.explanationRubyHtml,
                 showRuby: showRuby,
                 style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            ],
+            if (showChinese && question.explanation.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _ChineseTranslation(
+                text: translation.value.explanation,
+                isLoading: translation.isLoading,
+                error: translation.error,
+                onRetry: onRetryTranslation,
               ),
             ],
             if (question.explanationImageAssetPaths.isNotEmpty) ...[
@@ -1452,6 +1631,13 @@ class _PracticeSettingsButton extends ConsumerWidget {
                             title: const Text('ふりがなを表示'),
                             value: settings.showRuby,
                             onChanged: controller.setShowRuby,
+                          ),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('显示中文对照'),
+                            subtitle: const Text('在日文题目和解析下方显示中文'),
+                            value: settings.showChinese,
+                            onChanged: controller.setShowChinese,
                           ),
                         ],
                       ),

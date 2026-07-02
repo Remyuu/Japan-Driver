@@ -54,8 +54,9 @@ class QuestionBank {
 
   factory QuestionBank.fromJson(
     BankDefinition definition,
-    Map<String, Object?> json,
-  ) {
+    Map<String, Object?> json, {
+    Map<String, Object?> translations = const {},
+  }) {
     final source = (json['source'] as Map?)?.cast<String, Object?>();
     final questionsJson = (json['questions'] as List? ?? const [])
         .whereType<Map>()
@@ -71,7 +72,11 @@ class QuestionBank {
       hasChapters: definition.hasChapters,
       questions: [
         for (final question in questionsJson)
-          DriverQuestion.fromJson(definition, question),
+          DriverQuestion.fromJson(
+            definition,
+            question,
+            translations: translations,
+          ),
       ],
     );
   }
@@ -89,9 +94,11 @@ class DriverQuestion {
     required this.workbookId,
     required this.questionText,
     required this.questionRubyHtml,
+    required this.questionChinese,
     required this.answer,
     required this.explanation,
     required this.explanationRubyHtml,
+    required this.explanationChinese,
     required this.textbookRef,
     required this.questionImageAssetPaths,
     required this.explanationImageAssetPaths,
@@ -112,9 +119,11 @@ class DriverQuestion {
   final int? workbookId;
   final String questionText;
   final String? questionRubyHtml;
+  final String? questionChinese;
   final AnswerChoice answer;
   final String explanation;
   final String? explanationRubyHtml;
+  final String? explanationChinese;
   final String? textbookRef;
   final List<String> questionImageAssetPaths;
   final List<String> explanationImageAssetPaths;
@@ -128,11 +137,16 @@ class DriverQuestion {
 
   factory DriverQuestion.fromJson(
     BankDefinition definition,
-    Map<String, Object?> json,
-  ) {
+    Map<String, Object?> json, {
+    Map<String, Object?> translations = const {},
+  }) {
     final questionKey = _requiredString(json, 'question_key');
     final questionId = _nonEmptyString(json, 'question_id');
     final canonicalId = questionId ?? questionKey;
+    final translation = switch (translations[canonicalId]) {
+      final Map value => value.cast<String, Object?>(),
+      _ => const <String, Object?>{},
+    };
 
     return DriverQuestion(
       bankId: definition.id,
@@ -145,9 +159,15 @@ class DriverQuestion {
       workbookId: _int(json, 'workbook_id'),
       questionText: _requiredString(json, 'question'),
       questionRubyHtml: _nonEmptyString(json, 'question_ruby_html'),
+      questionChinese:
+          _nonEmptyString(json, 'question_zh') ??
+          _nonEmptyString(translation, 'question'),
       answer: AnswerChoice.fromRaw(_requiredString(json, 'answer')),
       explanation: _string(json, 'explanation') ?? '',
       explanationRubyHtml: _nonEmptyString(json, 'explanation_ruby_html'),
+      explanationChinese:
+          _nonEmptyString(json, 'explanation_zh') ??
+          _nonEmptyString(translation, 'explanation'),
       textbookRef: _nonEmptyString(json, 'textbook_ref'),
       questionImageAssetPaths: _assetPaths(
         definition,

@@ -19,6 +19,14 @@ void main() {
     );
     expect(fallbackIdQuestions, hasLength(58));
     expect(
+      banks.map((bank) => bank.questions.first.questionChinese),
+      everyElement(isNotEmpty),
+    );
+    expect(
+      banks.map((bank) => bank.questions.first.explanationChinese),
+      everyElement(isNotEmpty),
+    );
+    expect(
       fallbackIdQuestions.every(
         (question) => question.canonicalId == question.questionKey,
       ),

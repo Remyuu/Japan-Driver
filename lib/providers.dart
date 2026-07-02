@@ -8,10 +8,12 @@ import 'models/practice_record.dart';
 import 'models/progress_store.dart';
 import 'models/question_bank.dart';
 import 'models/question_comment.dart';
+import 'models/question_translation.dart';
 import 'repositories/account_repository.dart';
 import 'repositories/progress_repository.dart';
 import 'repositories/question_repository.dart';
 import 'repositories/settings_repository.dart';
+import 'repositories/translation_repository.dart';
 
 final accountRepositoryProvider = Provider<AccountRepository>((ref) {
   return const AccountRepository();
@@ -36,6 +38,35 @@ final progressRepositoryProvider = Provider<ProgressRepository>((ref) {
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
   return const SettingsRepository();
 });
+
+final translationRepositoryProvider = Provider<TranslationRepository>((ref) {
+  return TranslationRepository();
+});
+
+typedef QuestionTranslationLookup = ({
+  DriverQuestion question,
+  bool generateIfMissing,
+});
+
+final questionTranslationProvider = FutureProvider.autoDispose
+    .family<QuestionTranslation?, QuestionTranslationLookup>((ref, lookup) {
+      final question = lookup.question;
+      final local = QuestionTranslation(
+        question: question.questionChinese,
+        explanation: question.explanationChinese,
+      );
+      if (local.isComplete(hasExplanation: question.explanation.isNotEmpty)) {
+        return Future.value(local);
+      }
+
+      return ref
+          .watch(translationRepositoryProvider)
+          .getQuestionTranslation(
+            question,
+            generateIfMissing: lookup.generateIfMissing,
+          )
+          .then((remote) => local.merge(remote));
+    });
 
 final settingsControllerProvider =
     AsyncNotifierProvider<SettingsController, AppSettings>(
@@ -71,6 +102,11 @@ class SettingsController extends AsyncNotifier<AppSettings> {
   Future<void> setShowRuby(bool value) async {
     final current = state.value ?? AppSettings.defaults();
     await _saveSettings(current.copyWith(showRuby: value));
+  }
+
+  Future<void> setShowChinese(bool value) async {
+    final current = state.value ?? AppSettings.defaults();
+    await _saveSettings(current.copyWith(showChinese: value));
   }
 }
 

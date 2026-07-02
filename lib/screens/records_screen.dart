@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/practice_record.dart';
+import '../models/app_settings.dart';
 import '../models/progress_store.dart';
 import '../models/question_bank.dart';
 import '../navigation_transitions.dart';
@@ -73,6 +74,8 @@ class RecordDetailScreen extends ConsumerWidget {
         .where((record) => record.id == recordId)
         .firstOrNull;
     final banksAsync = ref.watch(questionBanksProvider);
+    final settings =
+        ref.watch(settingsControllerProvider).value ?? AppSettings.defaults();
 
     return Scaffold(
       appBar: AppBar(
@@ -99,8 +102,12 @@ class RecordDetailScreen extends ConsumerWidget {
                         _SavedAnswerSheet(record: record),
                         const SizedBox(height: 12),
                         banksAsync.when(
-                          data: (banks) =>
-                              _RecordQuestionList(record: record, banks: banks),
+                          data: (banks) => _RecordQuestionList(
+                            record: record,
+                            banks: banks,
+                            showRuby: settings.showRuby,
+                            showChinese: settings.showChinese,
+                          ),
                           loading: () => const Card(
                             child: Padding(
                               padding: EdgeInsets.all(20),
@@ -296,10 +303,17 @@ class _SavedAnswerCell extends StatelessWidget {
 }
 
 class _RecordQuestionList extends StatelessWidget {
-  const _RecordQuestionList({required this.record, required this.banks});
+  const _RecordQuestionList({
+    required this.record,
+    required this.banks,
+    required this.showRuby,
+    required this.showChinese,
+  });
 
   final PracticeRecord record;
   final List<QuestionBank> banks;
+  final bool showRuby;
+  final bool showChinese;
 
   @override
   Widget build(BuildContext context) {
@@ -314,6 +328,8 @@ class _RecordQuestionList extends StatelessWidget {
             number: i + 1,
             answer: record.answers[i],
             question: questionsById[record.answers[i].questionId],
+            showRuby: showRuby,
+            showChinese: showChinese,
           ),
           const SizedBox(height: 12),
         ],
@@ -347,11 +363,15 @@ class _RecordQuestionCard extends StatelessWidget {
     required this.number,
     required this.answer,
     required this.question,
+    required this.showRuby,
+    required this.showChinese,
   });
 
   final int number;
   final PracticeRecordAnswer answer;
   final DriverQuestion? question;
+  final bool showRuby;
+  final bool showChinese;
 
   @override
   Widget build(BuildContext context) {
@@ -392,8 +412,13 @@ class _RecordQuestionCard extends StatelessWidget {
               RubyText(
                 text: question.questionText,
                 rubyHtml: question.questionRubyHtml,
+                showRuby: showRuby,
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
+              if (showChinese && question.questionChinese != null) ...[
+                const SizedBox(height: 8),
+                _RecordChineseTranslation(text: question.questionChinese!),
+              ],
               if (question.questionImageAssetPaths.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 _RecordImageList(paths: question.questionImageAssetPaths),
@@ -415,12 +440,37 @@ class _RecordQuestionCard extends StatelessWidget {
               RubyText(
                 text: question.explanation,
                 rubyHtml: question.explanationRubyHtml,
+                showRuby: showRuby,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
+              if (showChinese && question.explanationChinese != null) ...[
+                const SizedBox(height: 8),
+                _RecordChineseTranslation(text: question.explanationChinese!),
+              ],
             ],
           ],
         ),
       ),
+    );
+  }
+}
+
+class _RecordChineseTranslation extends StatelessWidget {
+  const _RecordChineseTranslation({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: colors.secondaryContainer.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text('中文：$text'),
     );
   }
 }

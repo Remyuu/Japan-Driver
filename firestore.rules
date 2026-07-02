@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Translation cache is server-managed. Clients access it only through the
+    // callable function, whose Admin SDK bypasses these rules.
+    match /questionTranslations/{questionId} {
+      allow read, write: if false;
+    }
+  }
+}
