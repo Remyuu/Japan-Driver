@@ -458,7 +458,7 @@ class _StageConfig {
         title: '卒検前',
         subtitle: '第二段階・卒業検定前対策',
         oneToOneBankId: 'sotsuken_1to1',
-        examBankId: 'sotsuken_1to1',
+        examBankId: 'sotsuken_test',
         curriculumBankId: 'curriculum_stage2',
         rangeStep: 2,
         difficultLabel: '第二段階',

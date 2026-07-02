@@ -74,6 +74,8 @@ flutter:
     - scraped/musasi_ja_sotsuken/images/
     - scraped/musasi_ja_test_karimen/karimen_test_all.json
     - scraped/musasi_ja_test_karimen/images/
+    - scraped/musasi_ja_test_sotsuken/sotsuken_test_all.json
+    - scraped/musasi_ja_test_sotsuken/images/
     - scraped/musasi_ja_curriculum_stage1/curriculum_stage1_all.json
     - scraped/musasi_ja_curriculum_stage1/images/
     - scraped/musasi_ja_curriculum_stage2/curriculum_stage2_all.json

@@ -41,6 +41,13 @@ const driverBankDefinitions = <BankDefinition>[
     assetBasePath: 'scraped/musasi_ja_test_karimen',
   ),
   BankDefinition(
+    id: 'sotsuken_test',
+    title: '卒検前',
+    subtitle: 'テスト形式',
+    assetPath: 'scraped/musasi_ja_test_sotsuken/sotsuken_test_all.json',
+    assetBasePath: 'scraped/musasi_ja_test_sotsuken',
+  ),
+  BankDefinition(
     id: 'curriculum_stage1',
     title: '第一段階',
     subtitle: '項目別問題',

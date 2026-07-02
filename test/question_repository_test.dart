@@ -11,13 +11,13 @@ void main() {
         .where((question) => question.questionId == null)
         .toList();
 
-    expect(banks, hasLength(6));
-    expect(questions, hasLength(3537));
+    expect(banks, hasLength(7));
+    expect(questions, hasLength(4107));
     expect(
       questions.map((question) => question.canonicalId).toSet(),
-      hasLength(2294),
+      hasLength(2318),
     );
-    expect(fallbackIdQuestions, hasLength(58));
+    expect(fallbackIdQuestions, hasLength(69));
     expect(
       banks.map((bank) => bank.questions.first.questionChinese),
       everyElement(isNotEmpty),
