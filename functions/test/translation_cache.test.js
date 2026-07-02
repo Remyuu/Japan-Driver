@@ -14,15 +14,22 @@ test("accepts only a known question source", () => {
   const hash = computeSourceHash(question, explanation);
 
   const parsed = parseTranslationRequest(
-    {questionId: "5536", question, explanation},
+    {questionId: "5536", question, explanation, targetLanguage: "vi"},
     {5536: [hash]},
   );
 
   assert.equal(parsed.sourceHash, hash);
+  assert.equal(parsed.targetLanguage, "vi");
+  assert.equal(parsed.targetCacheKey, "vi");
   assert.equal(parsed.generateIfMissing, true);
   assert.throws(
     () => parseTranslationRequest(
-      {questionId: "5536", question: `${question}改`, explanation},
+      {
+        questionId: "5536",
+        question: `${question}改`,
+        explanation,
+        targetLanguage: "vi",
+      },
       {5536: [hash]},
     ),
     /unknown-question-source/,
@@ -35,19 +42,45 @@ test("returns only a ready translation for the current source", () => {
       {
         status: "ready",
         sourceHash: "current",
+        targetLanguage: "en",
         question: "中文题目",
         explanation: "中文解析",
       },
       "current",
+      "en",
     ),
     {question: "中文题目", explanation: "中文解析"},
   );
   assert.equal(
     readyTranslation(
-      {status: "ready", sourceHash: "old", question: "旧译文"},
+      {
+        status: "ready",
+        sourceHash: "old",
+        targetLanguage: "en",
+        question: "旧译文",
+      },
       "current",
+      "en",
     ),
     null,
+  );
+});
+
+test("rejects unsupported target languages", () => {
+  const question = "問題";
+  const explanation = "解説";
+  const hash = computeSourceHash(question, explanation);
+  assert.throws(
+    () => parseTranslationRequest(
+      {
+        questionId: "1",
+        question,
+        explanation,
+        targetLanguage: "fr",
+      },
+      {1: [hash]},
+    ),
+    /invalid-target-language/,
   );
 });
 

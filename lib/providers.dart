@@ -9,6 +9,7 @@ import 'models/progress_store.dart';
 import 'models/question_bank.dart';
 import 'models/question_comment.dart';
 import 'models/question_translation.dart';
+import 'models/translation_language.dart';
 import 'repositories/account_repository.dart';
 import 'repositories/progress_repository.dart';
 import 'repositories/question_repository.dart';
@@ -46,14 +47,19 @@ final translationRepositoryProvider = Provider<TranslationRepository>((ref) {
 typedef QuestionTranslationLookup = ({
   DriverQuestion question,
   bool generateIfMissing,
+  TranslationLanguage language,
 });
 
 final questionTranslationProvider = FutureProvider.autoDispose
     .family<QuestionTranslation?, QuestionTranslationLookup>((ref, lookup) {
       final question = lookup.question;
       final local = QuestionTranslation(
-        question: question.questionChinese,
-        explanation: question.explanationChinese,
+        question: lookup.language == TranslationLanguage.chinese
+            ? question.questionChinese
+            : null,
+        explanation: lookup.language == TranslationLanguage.chinese
+            ? question.explanationChinese
+            : null,
       );
       if (local.isComplete(hasExplanation: question.explanation.isNotEmpty)) {
         return Future.value(local);
@@ -63,6 +69,7 @@ final questionTranslationProvider = FutureProvider.autoDispose
           .watch(translationRepositoryProvider)
           .getQuestionTranslation(
             question,
+            language: lookup.language,
             generateIfMissing: lookup.generateIfMissing,
           )
           .then((remote) => local.merge(remote));
@@ -107,6 +114,16 @@ class SettingsController extends AsyncNotifier<AppSettings> {
   Future<void> setShowChinese(bool value) async {
     final current = state.value ?? AppSettings.defaults();
     await _saveSettings(current.copyWith(showChinese: value));
+  }
+
+  Future<void> setShowEnglish(bool value) async {
+    final current = state.value ?? AppSettings.defaults();
+    await _saveSettings(current.copyWith(showEnglish: value));
+  }
+
+  Future<void> setShowVietnamese(bool value) async {
+    final current = state.value ?? AppSettings.defaults();
+    await _saveSettings(current.copyWith(showVietnamese: value));
   }
 }
 

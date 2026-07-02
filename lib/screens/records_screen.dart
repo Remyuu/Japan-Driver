@@ -6,8 +6,11 @@ import '../models/practice_record.dart';
 import '../models/app_settings.dart';
 import '../models/progress_store.dart';
 import '../models/question_bank.dart';
+import '../models/question_translation.dart';
+import '../models/translation_language.dart';
 import '../navigation_transitions.dart';
 import '../providers.dart';
+import '../repositories/translation_repository.dart';
 import '../widgets/ruby_text.dart';
 
 class RecordsScreen extends ConsumerWidget {
@@ -106,7 +109,8 @@ class RecordDetailScreen extends ConsumerWidget {
                             record: record,
                             banks: banks,
                             showRuby: settings.showRuby,
-                            showChinese: settings.showChinese,
+                            translationLanguages:
+                                settings.enabledTranslationLanguages,
                           ),
                           loading: () => const Card(
                             child: Padding(
@@ -307,13 +311,13 @@ class _RecordQuestionList extends StatelessWidget {
     required this.record,
     required this.banks,
     required this.showRuby,
-    required this.showChinese,
+    required this.translationLanguages,
   });
 
   final PracticeRecord record;
   final List<QuestionBank> banks;
   final bool showRuby;
-  final bool showChinese;
+  final List<TranslationLanguage> translationLanguages;
 
   @override
   Widget build(BuildContext context) {
@@ -329,7 +333,7 @@ class _RecordQuestionList extends StatelessWidget {
             answer: record.answers[i],
             question: questionsById[record.answers[i].questionId],
             showRuby: showRuby,
-            showChinese: showChinese,
+            translationLanguages: translationLanguages,
           ),
           const SizedBox(height: 12),
         ],
@@ -358,26 +362,39 @@ class _RecordQuestionList extends StatelessWidget {
   }
 }
 
-class _RecordQuestionCard extends StatelessWidget {
+class _RecordQuestionCard extends ConsumerWidget {
   const _RecordQuestionCard({
     required this.number,
     required this.answer,
     required this.question,
     required this.showRuby,
-    required this.showChinese,
+    required this.translationLanguages,
   });
 
   final int number;
   final PracticeRecordAnswer answer;
   final DriverQuestion? question;
   final bool showRuby;
-  final bool showChinese;
+  final List<TranslationLanguage> translationLanguages;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isCorrect = answer.isCorrect;
     final color = isCorrect ? const Color(0xFF1D7F48) : const Color(0xFFB73A36);
     final question = this.question;
+    final translations =
+        <TranslationLanguage, AsyncValue<QuestionTranslation?>>{};
+    if (question != null) {
+      for (final language in translationLanguages) {
+        translations[language] = ref.watch(
+          questionTranslationProvider((
+            question: question,
+            language: language,
+            generateIfMissing: true,
+          )),
+        );
+      }
+    }
 
     return Card(
       child: Padding(
@@ -415,9 +432,14 @@ class _RecordQuestionCard extends StatelessWidget {
                 showRuby: showRuby,
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
-              if (showChinese && question.questionChinese != null) ...[
+              for (final entry in translations.entries) ...[
                 const SizedBox(height: 8),
-                _RecordChineseTranslation(text: question.questionChinese!),
+                _RecordTranslation(
+                  language: entry.key,
+                  text: entry.value.value?.question,
+                  isLoading: entry.value.isLoading,
+                  error: entry.value.error,
+                ),
               ],
               if (question.questionImageAssetPaths.isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -443,9 +465,14 @@ class _RecordQuestionCard extends StatelessWidget {
                 showRuby: showRuby,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
-              if (showChinese && question.explanationChinese != null) ...[
+              for (final entry in translations.entries) ...[
                 const SizedBox(height: 8),
-                _RecordChineseTranslation(text: question.explanationChinese!),
+                _RecordTranslation(
+                  language: entry.key,
+                  text: entry.value.value?.explanation,
+                  isLoading: entry.value.isLoading,
+                  error: entry.value.error,
+                ),
               ],
             ],
           ],
@@ -455,10 +482,18 @@ class _RecordQuestionCard extends StatelessWidget {
   }
 }
 
-class _RecordChineseTranslation extends StatelessWidget {
-  const _RecordChineseTranslation({required this.text});
+class _RecordTranslation extends StatelessWidget {
+  const _RecordTranslation({
+    required this.language,
+    required this.text,
+    required this.isLoading,
+    required this.error,
+  });
 
-  final String text;
+  final TranslationLanguage language;
+  final String? text;
+  final bool isLoading;
+  final Object? error;
 
   @override
   Widget build(BuildContext context) {
@@ -470,7 +505,28 @@ class _RecordChineseTranslation extends StatelessWidget {
         color: colors.secondaryContainer.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text('中文：$text'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            language.displayLabel,
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          if (text != null)
+            Text(text!)
+          else if (isLoading)
+            const LinearProgressIndicator()
+          else
+            Text(
+              error is TranslationNotConfiguredException
+                  ? '现场翻译尚未配置'
+                  : '翻译暂时失败',
+            ),
+        ],
+      ),
     );
   }
 }

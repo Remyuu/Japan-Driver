@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import '../firebase_bootstrap.dart';
 import '../models/question_bank.dart';
 import '../models/question_translation.dart';
+import '../models/translation_language.dart';
 
 typedef TranslationCall =
     Future<Object?> Function(Map<String, Object?> payload);
@@ -27,12 +28,14 @@ class TranslationRepository {
 
   Future<QuestionTranslation?> getQuestionTranslation(
     DriverQuestion question, {
+    required TranslationLanguage language,
     required bool generateIfMissing,
   }) {
     final requestKey = [
       question.canonicalId,
       question.questionText,
       question.explanation,
+      language.apiCode,
       generateIfMissing,
     ].join('\u0000');
     final pending = _pendingRequests[requestKey];
@@ -43,6 +46,7 @@ class TranslationRepository {
     request =
         _requestTranslation(
           question,
+          language: language,
           generateIfMissing: generateIfMissing,
         ).whenComplete(() {
           _pendingRequests.remove(requestKey);
@@ -53,6 +57,7 @@ class TranslationRepository {
 
   Future<QuestionTranslation?> _requestTranslation(
     DriverQuestion question, {
+    required TranslationLanguage language,
     required bool generateIfMissing,
   }) async {
     final call = _injectedCall ?? _firebaseCall;
@@ -60,6 +65,7 @@ class TranslationRepository {
       'questionId': question.canonicalId,
       'question': question.questionText,
       'explanation': question.explanation,
+      'targetLanguage': language.apiCode,
       'generateIfMissing': generateIfMissing,
     });
     if (response is! Map) {
@@ -73,14 +79,14 @@ class TranslationRepository {
       throw const TranslationException();
     }
 
-    final questionChinese = _nonEmptyString(translation['question']);
-    final explanationChinese = _nonEmptyString(translation['explanation']);
-    if (questionChinese == null) {
+    final translatedQuestion = _nonEmptyString(translation['question']);
+    final translatedExplanation = _nonEmptyString(translation['explanation']);
+    if (translatedQuestion == null) {
       throw const TranslationException();
     }
     return QuestionTranslation(
-      question: questionChinese,
-      explanation: explanationChinese,
+      question: translatedQuestion,
+      explanation: translatedExplanation,
     );
   }
 

@@ -1,16 +1,16 @@
-# 中文翻译后端
+# 多语言翻译后端
 
 ## 工作方式
 
-练习设置开启“显示中文对照”后，客户端按以下顺序取译文：
+中文、英语和越南语翻译开关默认全部关闭，可以在练习设置中独立开启。开启任意语言后，客户端按以下顺序取译文：
 
 1. 优先使用应用内人工译文。
 2. 调用 `getQuestionTranslation` Firebase Callable Function。
-3. 函数先按题目 ID 和原文哈希查询 Firestore 的 `questionTranslations` 集合。
-4. 缓存不存在时，函数调用 Google Cloud Translation v3（日文 `ja` → 简体中文 `zh-CN`）。
-5. 译文写入 Firestore；下一次访问直接返回缓存，不再调用 Google 翻译。
+3. 函数按题目 ID、目标语言和原文哈希查询 Firestore 的 `questionTranslations` 集合。
+4. 缓存不存在时，函数调用 Google Cloud Translation v3，从日文 `ja` 翻译为简体中文 `zh-CN`、英语 `en` 或越南语 `vi`。
+5. 译文按语言分别写入 Firestore；下一次访问相同语言时直接返回缓存，不再调用 Google 翻译。
 
-函数只接受 `functions/question_source_hashes.json` 中登记的题目原文哈希，不能被用作任意文本翻译接口。同一道题首次并发访问时使用 Firestore 租约避免重复调用 Google。
+函数只接受 `functions/question_source_hashes.json` 中登记的题目原文哈希，以及 `zh-CN`、`en`、`vi` 三个目标语言，不能被用作任意文本翻译接口。同一道题、同一种语言首次并发访问时使用 Firestore 租约避免重复调用 Google。
 
 ## 一次性云端配置
 
@@ -90,9 +90,10 @@ firebase emulators:start --only functions,firestore
 
 1. 打开任意没有人工译文的题目。
 2. 在右上角设置中开启“显示中文对照”。
-3. 确认先显示“正在调用 Google 翻译…”，随后显示中文题目。
-4. 答题后确认解析区域也出现中文。
-5. 在 Emulator UI 删除/查看 `questionTranslations/{题目ID}`，或刷新页面确认第二次直接命中缓存。
+3. 分别开启中文、English、Tiếng Việt，确认三个翻译卡片按所选语言显示；全部关闭时不应显示翻译卡片。
+4. 确认先显示“Google 翻译生成中…”，随后显示相应语言的题目。
+5. 答题后确认解析区域也出现已开启语言的翻译。
+6. 在 Emulator UI 查看 `questionTranslations/{题目ID}__{语言缓存键}`，或刷新页面确认第二次直接命中缓存。
 
 ## 部署后端
 

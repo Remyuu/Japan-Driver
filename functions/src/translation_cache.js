@@ -3,6 +3,11 @@ const {createHash} = require("node:crypto");
 const QUESTION_ID_PATTERN = /^[A-Za-z0-9_-]{1,160}$/;
 const MAX_QUESTION_LENGTH = 1200;
 const MAX_EXPLANATION_LENGTH = 4000;
+const TARGET_LANGUAGES = Object.freeze({
+  "zh-CN": "zh_cn",
+  en: "en",
+  vi: "vi",
+});
 
 function computeSourceHash(question, explanation) {
   return createHash("sha256")
@@ -26,6 +31,9 @@ function parseTranslationRequest(data, sourceHashes) {
   const explanation = typeof data.explanation === "string"
     ? data.explanation.trim()
     : "";
+  const targetLanguage = typeof data.targetLanguage === "string"
+    ? data.targetLanguage.trim()
+    : "";
 
   if (!QUESTION_ID_PATTERN.test(questionId)) {
     throw new TypeError("invalid-question-id");
@@ -35,6 +43,10 @@ function parseTranslationRequest(data, sourceHashes) {
   }
   if (explanation.length > MAX_EXPLANATION_LENGTH) {
     throw new TypeError("invalid-explanation");
+  }
+  const targetCacheKey = TARGET_LANGUAGES[targetLanguage];
+  if (targetCacheKey == null) {
+    throw new TypeError("invalid-target-language");
   }
 
   const sourceHash = computeSourceHash(question, explanation);
@@ -48,15 +60,18 @@ function parseTranslationRequest(data, sourceHashes) {
     question,
     explanation,
     sourceHash,
+    targetLanguage,
+    targetCacheKey,
     generateIfMissing: data.generateIfMissing !== false,
   };
 }
 
-function readyTranslation(data, sourceHash) {
+function readyTranslation(data, sourceHash, targetLanguage) {
   if (
     data == null ||
     data.status !== "ready" ||
     data.sourceHash !== sourceHash ||
+    data.targetLanguage !== targetLanguage ||
     typeof data.question !== "string" ||
     data.question.trim().length === 0
   ) {
@@ -89,6 +104,7 @@ function translationsFromResponse(response, includeExplanation) {
 }
 
 module.exports = {
+  TARGET_LANGUAGES,
   computeSourceHash,
   parseTranslationRequest,
   readyTranslation,

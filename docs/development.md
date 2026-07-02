@@ -7,7 +7,7 @@
 - GoRouter 页面路由
 - SharedPreferences 本地进度存储
 - Firebase Auth / Google 登录
-- Firebase Callable Functions / Firestore 翻译缓存
+- Firebase Callable Functions / Firestore 多语言翻译缓存
 - Google Cloud Translation v3
 - Nginx 静态部署
 

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:japan_driver/repositories/question_repository.dart';
 import 'package:japan_driver/repositories/translation_repository.dart';
+import 'package:japan_driver/models/translation_language.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -23,12 +24,14 @@ void main() {
 
       final translation = await repository.getQuestionTranslation(
         question,
+        language: TranslationLanguage.vietnamese,
         generateIfMissing: true,
       );
 
       expect(receivedPayload?['questionId'], question.canonicalId);
       expect(receivedPayload?['question'], question.questionText);
       expect(receivedPayload?['explanation'], question.explanation);
+      expect(receivedPayload?['targetLanguage'], 'vi');
       expect(receivedPayload?['generateIfMissing'], isTrue);
       expect(translation?.question, '中文题目');
       expect(translation?.explanation, '中文解析');
@@ -46,6 +49,7 @@ void main() {
 
       final translation = await repository.getQuestionTranslation(
         question,
+        language: TranslationLanguage.english,
         generateIfMissing: false,
       );
 

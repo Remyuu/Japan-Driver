@@ -40,7 +40,11 @@ async function acquireTranslationLease(documentReference, request) {
   return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(documentReference);
     const data = snapshot.data();
-    const cached = readyTranslation(data, request.sourceHash);
+    const cached = readyTranslation(
+      data,
+      request.sourceHash,
+      request.targetLanguage,
+    );
     if (cached != null) {
       return {cached};
     }
@@ -60,7 +64,7 @@ async function acquireTranslationLease(documentReference, request) {
         status: "translating",
         sourceHash: request.sourceHash,
         sourceLanguage: "ja",
-        targetLanguage: "zh-CN",
+        targetLanguage: request.targetLanguage,
         leaseUntil: Timestamp.fromMillis(Date.now() + LEASE_MILLISECONDS),
         updatedAt: FieldValue.serverTimestamp(),
       },
@@ -70,11 +74,19 @@ async function acquireTranslationLease(documentReference, request) {
   });
 }
 
-async function waitForTranslation(documentReference, sourceHash) {
+async function waitForTranslation(
+  documentReference,
+  sourceHash,
+  targetLanguage,
+) {
   for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt += 1) {
     await sleep(POLL_INTERVAL_MILLISECONDS);
     const snapshot = await documentReference.get();
-    const cached = readyTranslation(snapshot.data(), sourceHash);
+    const cached = readyTranslation(
+      snapshot.data(),
+      sourceHash,
+      targetLanguage,
+    );
     if (cached != null) {
       return cached;
     }
@@ -97,7 +109,7 @@ async function translateWithGoogle(request) {
     contents,
     mimeType: "text/plain",
     sourceLanguageCode: "ja",
-    targetLanguageCode: "zh-CN",
+    targetLanguageCode: request.targetLanguage,
     labels: {app: "japan_driver"},
   });
   return translationsFromResponse(response, request.explanation.length > 0);
@@ -116,11 +128,12 @@ exports.getQuestionTranslation = onCall(async (callRequest) => {
 
   const documentReference = db
     .collection("questionTranslations")
-    .doc(request.questionId);
+    .doc(`${request.questionId}__${request.targetCacheKey}`);
   const initialSnapshot = await documentReference.get();
   const initialCached = readyTranslation(
     initialSnapshot.data(),
     request.sourceHash,
+    request.targetLanguage,
   );
   if (initialCached != null) {
     return {translation: initialCached, cached: true};
@@ -137,6 +150,7 @@ exports.getQuestionTranslation = onCall(async (callRequest) => {
     const cached = await waitForTranslation(
       documentReference,
       request.sourceHash,
+      request.targetLanguage,
     );
     if (cached != null) {
       return {translation: cached, cached: true};
@@ -155,7 +169,7 @@ exports.getQuestionTranslation = onCall(async (callRequest) => {
         status: "ready",
         sourceHash: request.sourceHash,
         sourceLanguage: "ja",
-        targetLanguage: "zh-CN",
+        targetLanguage: request.targetLanguage,
         provider: "google-cloud-translation-v3",
         leaseUntil: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -166,6 +180,7 @@ exports.getQuestionTranslation = onCall(async (callRequest) => {
   } catch (error) {
     logger.error("Google translation failed", {
       questionId: request.questionId,
+      targetLanguage: request.targetLanguage,
       error,
     });
     await documentReference.set(
