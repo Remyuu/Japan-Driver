@@ -104,3 +104,16 @@ firebase emulators:start --only functions,firestore
 ```
 
 脚本会重新生成题库哈希、安装依赖、运行后端检查与测试，然后部署 Callable Function 和 Firestore Rules。静态 Flutter 网站仍由 `scripts/deploy_remoooo.sh` 单独发布。
+
+## 常见排查
+
+如果 English 或 Tiếng Việt 卡片显示“实时翻译服务暂不可用”一类提示，而中文仍可显示，通常是因为中文命中了应用内人工译文，但线上 Callable Function 尚未部署成功。确认 `getQuestionTranslation` 已部署到 `asia-northeast1`，并且前端使用的 Firebase 项目 ID 与部署项目一致。
+
+可以先用只读缓存查询确认函数是否存在；如果 HTTP 返回 404，说明当前项目/区域没有这个函数：
+
+```bash
+curl -i \
+  -X POST "https://asia-northeast1-${PROJECT_ID}.cloudfunctions.net/getQuestionTranslation" \
+  -H "Content-Type: application/json" \
+  -d '{"data":{"questionId":"5454","question":"...","explanation":"","targetLanguage":"en","generateIfMissing":false}}'
+```

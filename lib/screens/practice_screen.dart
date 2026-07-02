@@ -15,7 +15,7 @@ import '../models/question_translation.dart';
 import '../models/translation_language.dart';
 import '../navigation_transitions.dart';
 import '../providers.dart';
-import '../repositories/translation_repository.dart';
+import '../translation_messages.dart';
 import '../widgets/ruby_text.dart';
 
 enum PracticeFeedbackMode {
@@ -1012,28 +1012,24 @@ class _TranslationCard extends StatelessWidget {
           if (text != null)
             Text(text!, style: Theme.of(context).textTheme.bodyLarge)
           else if (isLoading)
-            const Row(
+            Row(
               children: [
-                SizedBox.square(
+                const SizedBox.square(
                   dimension: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-                SizedBox(width: 10),
-                Expanded(child: Text('Google 翻译生成中…')),
+                const SizedBox(width: 10),
+                Expanded(child: Text(language.loadingMessage)),
               ],
             )
           else ...[
-            Text(
-              error is TranslationNotConfiguredException
-                  ? '现场翻译尚未配置'
-                  : '翻译暂时失败，请稍后重试',
-            ),
+            Text(translationFailureMessage(language, error)),
             if (onRetry != null) ...[
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh_rounded),
-                label: const Text('重试'),
+                label: Text(language.retryLabel),
               ),
             ],
           ],

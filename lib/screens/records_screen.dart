@@ -10,7 +10,7 @@ import '../models/question_translation.dart';
 import '../models/translation_language.dart';
 import '../navigation_transitions.dart';
 import '../providers.dart';
-import '../repositories/translation_repository.dart';
+import '../translation_messages.dart';
 import '../widgets/ruby_text.dart';
 
 class RecordsScreen extends ConsumerWidget {
@@ -518,13 +518,16 @@ class _RecordTranslation extends StatelessWidget {
           if (text != null)
             Text(text!)
           else if (isLoading)
-            const LinearProgressIndicator()
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const LinearProgressIndicator(),
+                const SizedBox(height: 6),
+                Text(language.loadingMessage),
+              ],
+            )
           else
-            Text(
-              error is TranslationNotConfiguredException
-                  ? '现场翻译尚未配置'
-                  : '翻译暂时失败',
-            ),
+            Text(translationFailureMessage(language, error)),
         ],
       ),
     );
