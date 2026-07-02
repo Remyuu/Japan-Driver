@@ -1,32 +1,32 @@
 # Japan Driver
 
-面向日本驾照学科考试的在线练习工具，覆盖仮免前与卒検前两个学习阶段。
+An online tool for the Japanese driver’s license written exam, covering the two learning stages before the provisional license test and before the final graduation test.
 
-[在线使用](https://remoooo.com/jp-driver/) · [开发文档](docs/development.md)
+[Use Online](https://remoooo.com/jp-driver/) · [Development Docs](docs/development.md)
 
-## 产品介绍
+## Product Overview
 
-Japan Driver 将驾照学科题库整理为适合日常练习的 Web 应用。你可以按考试阶段、练习方式或教材章节选择题目，在答题后查看解析，并持续追踪自己的完成度与薄弱项目。
+Japan Driver organizes Japanese driver’s license written exam questions into a Web app suited for daily practice. You can choose questions by exam stage, practice mode, or textbook chapter, review explanations after answering, and continuously track your completion progress and weak areas.
 
-## 主要功能
+## Main Features
 
-- **分阶段备考**：分别提供仮免前与卒検前题目。
-- **多种练习方式**：支持一问一答、考试形式、按项目练习和高频易错题。
-- **日语阅读辅助**：题目与解析支持假名标注、配图和教材出处。
-- **学习进度统计**：查看已回答题数、正答率、错误数和各题库完成度。
-- **错题与答题记录**：保留练习结果，方便回看答案与解析。
-- **题目笔记**：可以为单道题添加自己的备注。
-- **Google 账号**：支持使用 Google 账号注册和登录。
-- **多端适配**：可在电脑和手机浏览器中使用。
+* **Stage-based preparation**: Provides separate question sets for the pre-provisional-license stage and the pre-graduation-test stage.
+* **Multiple practice modes**: Supports one-question-at-a-time practice, exam-style practice, category-based practice, and frequently missed questions.
+* **Japanese reading support**: Questions and explanations support furigana, images, and textbook references.
+* **Learning progress statistics**: View answered question count, accuracy rate, number of mistakes, and completion progress for each question bank.
+* **Mistake review and answer history**: Saves practice results so you can review answers and explanations later.
+* **Question notes**: Add your own notes to individual questions.
+* **Google account**: Supports registration and login with a Google account.
+* **Multi-device layout**: Usable in desktop and mobile browsers.
 
-## 开始使用
+## Getting Started
 
-打开 [Japan Driver](https://remoooo.com/jp-driver/)，选择当前备考阶段和练习方式即可开始答题。
+Open [Japan Driver](https://remoooo.com/jp-driver/), then choose your current study stage and practice mode to start answering questions.
 
-目前学习进度、答题记录和题目笔记保存在当前浏览器中。清除网站数据或更换设备时，这些记录不会自动同步。
+At the moment, learning progress, answer history, and question notes are stored in the current browser. These records will not sync automatically if you clear site data or switch devices.
 
-## 项目状态
+## Project Status
 
-产品仍在持续完善中。当前版本优先提供 Web 端的题目练习、记录与统计体验。
+The product is still under active development. The current version prioritizes the Web experience for question practice, records, and statistics.
 
-题库、图片与音频内容目前仅用于产品验证；公开使用前应确认相关内容授权。
+The question bank, images, and audio content are currently used only for product validation. Relevant content licenses should be confirmed before public release.
