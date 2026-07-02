@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../account_access.dart';
 import '../models/answer_choice.dart';
 import '../models/app_settings.dart';
 import '../models/practice_draft.dart';
@@ -15,7 +16,9 @@ import '../models/question_translation.dart';
 import '../models/translation_language.dart';
 import '../navigation_transitions.dart';
 import '../providers.dart';
+import '../question_stage.dart';
 import '../translation_messages.dart';
+import '../widgets/account_gate.dart';
 import '../widgets/ruby_text.dart';
 
 enum PracticeFeedbackMode {
@@ -94,6 +97,42 @@ class PracticeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final userAsync = ref.watch(accountUserProvider);
+    if (userAsync.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (userAsync.value == null &&
+        !canGuestStartPractice(
+          bankId: bankId,
+          isInstantFeedback: feedbackMode == PracticeFeedbackMode.instant,
+          workbookNumber: workbookNumber,
+          chapterNumber: chapterNumber,
+          rangeStep: rangeStep,
+        )) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('アカウント連携'),
+          leading: IconButton(
+            tooltip: '戻る',
+            onPressed: () => context.popOrGoBack('/'),
+            icon: const Icon(Icons.chevron_left_rounded),
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: const AccountRequiredCard(
+                title: 'この問題にはアカウント連携が必要です',
+                message: '未連携では、仮免・本免の一問一答「第1回」のみ利用できます。',
+                icon: Icons.lock_outline_rounded,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     final banksAsync = ref.watch(questionBanksProvider);
     final progress = ref
         .watch(progressControllerProvider)
@@ -173,6 +212,8 @@ class WrongReviewScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final userAsync = ref.watch(accountUserProvider);
+    final user = userAsync.value;
     final banksAsync = ref.watch(questionBanksProvider);
     final progress = ref
         .watch(progressControllerProvider)
@@ -181,6 +222,35 @@ class WrongReviewScreen extends ConsumerWidget {
           error: (error, stackTrace) => ProgressStore.empty(),
           loading: ProgressStore.empty,
         );
+
+    if (userAsync.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (user == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('間違い復習'),
+          leading: IconButton(
+            tooltip: '戻る',
+            onPressed: () => context.popOrGoBack('/'),
+            icon: const Icon(Icons.chevron_left_rounded),
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: AccountRequiredCard(
+                title: '間違い復習にはアカウント連携が必要です',
+                message: '間違えた問題は連携したアカウントに保存されます。',
+                icon: Icons.replay_rounded,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return banksAsync.when(
       data: (banks) {
@@ -405,14 +475,20 @@ class _QuestionPracticeRunnerState
   }
 
   Future<void> _finish() async {
-    await _savePracticeRecord();
-    await ref
-        .read(progressControllerProvider.notifier)
-        .removeDraft(widget.sessionId);
-    if (!mounted) {
-      return;
+    try {
+      await _savePracticeRecord();
+      await ref
+          .read(progressControllerProvider.notifier)
+          .removeDraft(widget.sessionId);
+    } catch (error) {
+      if (mounted) {
+        _showSyncError(error);
+      }
+    } finally {
+      if (mounted) {
+        _leavePractice();
+      }
     }
-    _leavePractice();
   }
 
   void _leavePractice() {
@@ -499,31 +575,47 @@ class _QuestionPracticeRunnerState
   }
 
   Future<void> _saveDraftAndLeave() async {
-    await ref
-        .read(progressControllerProvider.notifier)
-        .saveDraft(
-          PracticeDraft(
-            sessionId: widget.sessionId,
-            currentIndex: _index,
-            answers: Map<int, AnswerChoice>.of(_selectedAnswers),
-            savedAt: DateTime.now(),
-            remainingSeconds: _isExam ? _remainingSeconds : null,
-          ),
-        );
-    if (!mounted) {
+    try {
+      await ref
+          .read(progressControllerProvider.notifier)
+          .saveDraft(
+            PracticeDraft(
+              sessionId: widget.sessionId,
+              currentIndex: _index,
+              answers: Map<int, AnswerChoice>.of(_selectedAnswers),
+              savedAt: DateTime.now(),
+              remainingSeconds: _isExam ? _remainingSeconds : null,
+            ),
+          );
+    } catch (error) {
+      if (mounted) {
+        _showSyncError(error);
+      }
       return;
     }
-    _leavePractice();
+    if (mounted) {
+      _leavePractice();
+    }
   }
 
   Future<void> _discardDraftAndLeave() async {
-    await ref
-        .read(progressControllerProvider.notifier)
-        .removeDraft(widget.sessionId);
-    if (!mounted) {
-      return;
+    try {
+      await ref
+          .read(progressControllerProvider.notifier)
+          .removeDraft(widget.sessionId);
+    } catch (_) {
+      // Discarding must never trap the user in the practice screen.
+    } finally {
+      if (mounted) {
+        _leavePractice();
+      }
     }
-    _leavePractice();
+  }
+
+  void _showSyncError(Object error) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('保存できませんでした: $error')));
   }
 
   Future<void> _confirmExit() async {
@@ -555,8 +647,10 @@ class _QuestionPracticeRunnerState
     switch (action) {
       case _ExitAction.save:
         await _saveDraftAndLeave();
+        return;
       case _ExitAction.discard:
         await _discardDraftAndLeave();
+        return;
       case _ExitAction.cancel:
       case null:
         return;
@@ -581,6 +675,15 @@ class _QuestionPracticeRunnerState
     final commentCount = question == null
         ? 0
         : progress.commentsByQuestion[question.canonicalId]?.length ?? 0;
+    final favoriteStageId = question == null ? null : questionStageId(question);
+    final isFavorite =
+        question != null &&
+        favoriteStageId != null &&
+        progress.isFavorite(
+          stageId: favoriteStageId,
+          questionId: question.canonicalId,
+        );
+    final userAsync = ref.watch(accountUserProvider);
     final translations = <TranslationLanguage, _TranslationState>{};
     final retryTranslations = <TranslationLanguage, VoidCallback>{};
     if (question != null) {
@@ -614,6 +717,27 @@ class _QuestionPracticeRunnerState
             Padding(
               padding: const EdgeInsets.only(right: 16),
               child: Center(child: _TimerBadge(text: _timerText)),
+            ),
+          if (question != null && favoriteStageId != null)
+            IconButton(
+              tooltip: isFavorite ? 'お気に入りから削除' : 'お気に入りに追加',
+              onPressed: () {
+                if (userAsync.value == null) {
+                  showAccountDialog(context, ref);
+                  return;
+                }
+                ref
+                    .read(progressControllerProvider.notifier)
+                    .toggleFavorite(
+                      stageId: favoriteStageId,
+                      questionId: question.canonicalId,
+                    );
+              },
+              icon: Icon(
+                isFavorite
+                    ? Icons.bookmark_rounded
+                    : Icons.bookmark_border_rounded,
+              ),
             ),
           const _PracticeSettingsButton(),
           const SizedBox(width: 4),
@@ -1365,12 +1489,30 @@ class _CommentPanelState extends ConsumerState<_CommentPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final userAsync = ref.watch(accountUserProvider);
+    final user = userAsync.value;
     final comments =
         ref
             .watch(progressControllerProvider)
             .value
             ?.commentsByQuestion[widget.questionId] ??
         const <QuestionComment>[];
+
+    if (userAsync.isLoading) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+    if (user == null) {
+      return const AccountRequiredCard(
+        title: 'コメントにはアカウント連携が必要です',
+        message: '問題ごとのコメントは連携したアカウントに保存されます。',
+        icon: Icons.mode_comment_outlined,
+      );
+    }
 
     return Card(
       child: Padding(

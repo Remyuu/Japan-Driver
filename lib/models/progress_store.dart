@@ -59,18 +59,21 @@ class ProgressStore {
     required this.drafts,
     required this.records,
     required this.commentsByQuestion,
+    required this.favoriteQuestionIdsByStage,
   });
 
   final Map<String, QuestionProgress> byQuestion;
   final Map<String, PracticeDraft> drafts;
   final List<PracticeRecord> records;
   final Map<String, List<QuestionComment>> commentsByQuestion;
+  final Map<String, Set<String>> favoriteQuestionIdsByStage;
 
   factory ProgressStore.empty() => const ProgressStore(
     byQuestion: {},
     drafts: {},
     records: [],
     commentsByQuestion: {},
+    favoriteQuestionIdsByStage: {},
   );
 
   int get answeredQuestionCount => byQuestion.length;
@@ -102,6 +105,37 @@ class ProgressStore {
 
   bool isWrong(String questionId) => byQuestion[questionId]?.isWrong ?? false;
 
+  Set<String> favoritesForStage(String stageId) =>
+      favoriteQuestionIdsByStage[stageId] ?? const {};
+
+  bool isFavorite({required String stageId, required String questionId}) {
+    return favoritesForStage(stageId).contains(questionId);
+  }
+
+  ProgressStore toggleFavorite({
+    required String stageId,
+    required String questionId,
+  }) {
+    final nextFavorites = {
+      for (final entry in favoriteQuestionIdsByStage.entries)
+        entry.key: Set<String>.of(entry.value),
+    };
+    final stageFavorites = nextFavorites.putIfAbsent(stageId, () => {});
+    if (!stageFavorites.add(questionId)) {
+      stageFavorites.remove(questionId);
+    }
+    if (stageFavorites.isEmpty) {
+      nextFavorites.remove(stageId);
+    }
+    return ProgressStore(
+      byQuestion: byQuestion,
+      drafts: drafts,
+      records: records,
+      commentsByQuestion: commentsByQuestion,
+      favoriteQuestionIdsByStage: nextFavorites,
+    );
+  }
+
   ProgressStore recordAnswer({
     required String questionId,
     required AnswerChoice selectedAnswer,
@@ -125,6 +159,7 @@ class ProgressStore {
       drafts: drafts,
       records: records,
       commentsByQuestion: commentsByQuestion,
+      favoriteQuestionIdsByStage: favoriteQuestionIdsByStage,
     );
   }
 
@@ -134,6 +169,7 @@ class ProgressStore {
       drafts: {...drafts, draft.sessionId: draft},
       records: records,
       commentsByQuestion: commentsByQuestion,
+      favoriteQuestionIdsByStage: favoriteQuestionIdsByStage,
     );
   }
 
@@ -144,6 +180,7 @@ class ProgressStore {
       drafts: nextDrafts,
       records: records,
       commentsByQuestion: commentsByQuestion,
+      favoriteQuestionIdsByStage: favoriteQuestionIdsByStage,
     );
   }
 
@@ -153,6 +190,7 @@ class ProgressStore {
       drafts: drafts,
       records: [record, ...records].take(200).toList(growable: false),
       commentsByQuestion: commentsByQuestion,
+      favoriteQuestionIdsByStage: favoriteQuestionIdsByStage,
     );
   }
 
@@ -166,6 +204,7 @@ class ProgressStore {
         ...commentsByQuestion,
         comment.questionId: [...comments, comment],
       },
+      favoriteQuestionIdsByStage: favoriteQuestionIdsByStage,
     );
   }
 
@@ -193,6 +232,7 @@ class ProgressStore {
       drafts: drafts,
       records: records,
       commentsByQuestion: nextComments,
+      favoriteQuestionIdsByStage: favoriteQuestionIdsByStage,
     );
   }
 
@@ -200,7 +240,7 @@ class ProgressStore {
 
   Map<String, Object?> toJson() {
     return {
-      'version': 2,
+      'version': 3,
       'questions': {
         for (final entry in byQuestion.entries) entry.key: entry.value.toJson(),
       },
@@ -211,6 +251,10 @@ class ProgressStore {
       'comments': {
         for (final entry in commentsByQuestion.entries)
           entry.key: [for (final comment in entry.value) comment.toJson()],
+      },
+      'favorites': {
+        for (final entry in favoriteQuestionIdsByStage.entries)
+          entry.key: entry.value.toList(growable: false),
       },
     };
   }
@@ -227,6 +271,7 @@ class ProgressStore {
     final drafts = decoded['drafts'];
     final records = decoded['records'];
     final comments = decoded['comments'];
+    final favorites = decoded['favorites'];
     return ProgressStore(
       byQuestion: {
         if (questions is Map)
@@ -259,6 +304,14 @@ class ProgressStore {
                   if (comment is Map)
                     QuestionComment.fromJson(comment.cast<String, Object?>()),
               ],
+      },
+      favoriteQuestionIdsByStage: {
+        if (favorites is Map)
+          for (final entry in favorites.entries)
+            if (entry.key is String && entry.value is List)
+              entry.key as String: (entry.value as List)
+                  .whereType<String>()
+                  .toSet(),
       },
     );
   }

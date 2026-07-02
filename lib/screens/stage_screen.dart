@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../account_access.dart';
 import '../models/practice_draft.dart';
 import '../models/progress_store.dart';
 import '../models/question_bank.dart';
 import '../navigation_transitions.dart';
 import '../providers.dart';
+import '../widgets/account_gate.dart';
 
 class StageScreen extends ConsumerWidget {
   const StageScreen({super.key, required this.stageId, this.sectionId});
@@ -40,6 +42,8 @@ class StageScreen extends ConsumerWidget {
     }
 
     final banksAsync = ref.watch(questionBanksProvider);
+    final userAsync = ref.watch(accountUserProvider);
+    final user = userAsync.value;
     final progress = ref
         .watch(progressControllerProvider)
         .when(
@@ -63,6 +67,8 @@ class StageScreen extends ConsumerWidget {
           section: section,
           banks: banks,
           progress: progress,
+          canTrackProgress: user != null && !userAsync.isLoading,
+          onAccountRequired: () => showAccountDialog(context, ref),
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => Center(child: Text('$error')),
@@ -71,13 +77,15 @@ class StageScreen extends ConsumerWidget {
   }
 }
 
-class _StageMenuContent extends StatelessWidget {
+class _StageMenuContent extends ConsumerWidget {
   const _StageMenuContent({required this.config});
 
   final _StageConfig config;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userAsync = ref.watch(accountUserProvider);
+    final hasAccount = userAsync.value != null;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [
@@ -99,9 +107,18 @@ class _StageMenuContent extends StatelessWidget {
                       ) ...[
                         _StageSectionOption(
                           section: _StageSection.values[i],
-                          onTap: () => context.push(
-                            '/stage/${config.id}/${_StageSection.values[i].id}',
-                          ),
+                          isLocked:
+                              !hasAccount &&
+                              _StageSection.values[i] != _StageSection.oneToOne,
+                          onTap: () {
+                            final section = _StageSection.values[i];
+                            if (!hasAccount &&
+                                section != _StageSection.oneToOne) {
+                              showAccountDialog(context, ref);
+                              return;
+                            }
+                            context.push('/stage/${config.id}/${section.id}');
+                          },
                         ),
                         if (i != _StageSection.values.length - 1)
                           const Divider(height: 1, color: Color(0xFFE3E1DC)),
@@ -124,12 +141,16 @@ class _StageDetailContent extends StatelessWidget {
     required this.section,
     required this.banks,
     required this.progress,
+    required this.canTrackProgress,
+    required this.onAccountRequired,
   });
 
   final _StageConfig config;
   final _StageSection section;
   final List<QuestionBank> banks;
   final ProgressStore progress;
+  final bool canTrackProgress;
+  final VoidCallback onAccountRequired;
 
   @override
   Widget build(BuildContext context) {
@@ -191,15 +212,35 @@ class _StageDetailContent extends StatelessWidget {
               (question) => question.workbookDisplayNo == number,
             ),
           ),
-          draft:
-              progress.drafts[practiceSessionId(
+          draft: canTrackProgress
+              ? progress.drafts[practiceSessionId(
+                  bankId: bank.id,
+                  mode: feedbackMode,
+                  workbookNumber: number,
+                )]
+              : null,
+          isLocked:
+              !canTrackProgress &&
+              !canGuestStartPractice(
                 bankId: bank.id,
-                mode: feedbackMode,
+                isInstantFeedback: feedbackMode == 'instant',
                 workbookNumber: number,
-              )],
-          onTap: () => context.push(
-            '/practice/${bank.id}?workbook=$number&mode=$feedbackMode&stage=${config.id}&section=${section.id}',
-          ),
+                chapterNumber: null,
+                rangeStep: null,
+              ),
+          onTap:
+              !canTrackProgress &&
+                  !canGuestStartPractice(
+                    bankId: bank.id,
+                    isInstantFeedback: feedbackMode == 'instant',
+                    workbookNumber: number,
+                    chapterNumber: null,
+                    rangeStep: null,
+                  )
+              ? onAccountRequired
+              : () => context.push(
+                  '/practice/${bank.id}?workbook=$number&mode=$feedbackMode&stage=${config.id}&section=${section.id}',
+                ),
         ),
     ];
   }
@@ -215,15 +256,19 @@ class _StageDetailContent extends StatelessWidget {
               (question) => question.chapterNumbers.contains(chapter.number),
             ),
           ),
-          draft:
-              progress.drafts[practiceSessionId(
-                bankId: curriculum.id,
-                mode: 'instant',
-                chapterNumber: chapter.number,
-              )],
-          onTap: () => context.push(
-            '/practice/${curriculum.id}?chapter=${chapter.number}&mode=instant&stage=${config.id}&section=${section.id}',
-          ),
+          draft: canTrackProgress
+              ? progress.drafts[practiceSessionId(
+                  bankId: curriculum.id,
+                  mode: 'instant',
+                  chapterNumber: chapter.number,
+                )]
+              : null,
+          isLocked: !canTrackProgress,
+          onTap: canTrackProgress
+              ? () => context.push(
+                  '/practice/${curriculum.id}?chapter=${chapter.number}&mode=instant&stage=${config.id}&section=${section.id}',
+                )
+              : onAccountRequired,
         ),
     ];
   }
@@ -238,21 +283,28 @@ class _StageDetailContent extends StatelessWidget {
             (question) => question.rangeStep == config.rangeStep,
           ),
         ),
-        draft:
-            progress.drafts[practiceSessionId(
-              bankId: difficult.id,
-              mode: 'instant',
-              rangeStep: config.rangeStep,
-            )],
-        onTap: () => context.push(
-          '/practice/${difficult.id}?rangeStep=${config.rangeStep}&mode=instant&stage=${config.id}&section=${section.id}',
-        ),
+        draft: canTrackProgress
+            ? progress.drafts[practiceSessionId(
+                bankId: difficult.id,
+                mode: 'instant',
+                rangeStep: config.rangeStep,
+              )]
+            : null,
+        isLocked: !canTrackProgress,
+        onTap: canTrackProgress
+            ? () => context.push(
+                '/practice/${difficult.id}?rangeStep=${config.rangeStep}&mode=instant&stage=${config.id}&section=${section.id}',
+              )
+            : onAccountRequired,
       ),
     ];
   }
 
   String _summary(Iterable<DriverQuestion> questions) {
     final ids = questions.map((question) => question.canonicalId).toSet();
+    if (!canTrackProgress) {
+      return '${ids.length}問 / 進捗保存はアカウント連携後';
+    }
     final answered = ids
         .where((id) => progress.byQuestion.containsKey(id))
         .length;
@@ -288,10 +340,15 @@ enum _StageSection {
 }
 
 class _StageSectionOption extends StatelessWidget {
-  const _StageSectionOption({required this.section, required this.onTap});
+  const _StageSectionOption({
+    required this.section,
+    required this.onTap,
+    required this.isLocked,
+  });
 
   final _StageSection section;
   final VoidCallback onTap;
+  final bool isLocked;
 
   @override
   Widget build(BuildContext context) {
@@ -314,7 +371,11 @@ class _StageSectionOption extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded),
+            Icon(
+              isLocked
+                  ? Icons.lock_outline_rounded
+                  : Icons.chevron_right_rounded,
+            ),
           ],
         ),
       ),
@@ -359,6 +420,7 @@ class _PracticeOption extends StatelessWidget {
     required this.label,
     required this.meta,
     required this.onTap,
+    this.isLocked = false,
     this.draft,
   });
 
@@ -366,6 +428,7 @@ class _PracticeOption extends StatelessWidget {
   final String meta;
   final VoidCallback onTap;
   final PracticeDraft? draft;
+  final bool isLocked;
 
   @override
   Widget build(BuildContext context) {
@@ -382,7 +445,9 @@ class _PracticeOption extends StatelessWidget {
                   Text(label, style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 4),
                   Text(
-                    draft == null
+                    isLocked
+                        ? '$meta / アカウント連携後に利用できます'
+                        : draft == null
                         ? meta
                         : '$meta / 続きから 問${draft!.currentIndex + 1}',
                   ),
@@ -393,7 +458,11 @@ class _PracticeOption extends StatelessWidget {
               const SizedBox(width: 8),
               const _ContinueBadge(),
             ],
-            const Icon(Icons.chevron_right_rounded),
+            Icon(
+              isLocked
+                  ? Icons.lock_outline_rounded
+                  : Icons.chevron_right_rounded,
+            ),
           ],
         ),
       ),
@@ -445,7 +514,7 @@ class _StageConfig {
     return switch (id) {
       'karimen' => const _StageConfig(
         id: 'karimen',
-        title: '仮免前',
+        title: '仮免',
         subtitle: '第一段階・仮免試験対策',
         oneToOneBankId: 'karimen_1to1',
         examBankId: 'karimen_test',
@@ -455,7 +524,7 @@ class _StageConfig {
       ),
       'sotsuken' => const _StageConfig(
         id: 'sotsuken',
-        title: '卒検前',
+        title: '本免',
         subtitle: '第二段階・卒業検定前対策',
         oneToOneBankId: 'sotsuken_1to1',
         examBankId: 'sotsuken_test',

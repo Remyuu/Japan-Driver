@@ -5,12 +5,15 @@ import '../models/progress_store.dart';
 import '../models/question_bank.dart';
 import '../navigation_transitions.dart';
 import '../providers.dart';
+import '../widgets/account_gate.dart';
 
 class StatsScreen extends ConsumerWidget {
   const StatsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final userAsync = ref.watch(accountUserProvider);
+    final user = userAsync.value;
     final banksAsync = ref.watch(questionBanksProvider);
     final progress = ref
         .watch(progressControllerProvider)
@@ -29,11 +32,27 @@ class StatsScreen extends ConsumerWidget {
           icon: const Icon(Icons.chevron_left_rounded),
         ),
       ),
-      body: banksAsync.when(
-        data: (banks) => _StatsContent(banks: banks, progress: progress),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(child: Text('$error')),
-      ),
+      body: userAsync.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : user == null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: AccountRequiredCard(
+                    title: '統計にはアカウント連携が必要です',
+                    message: '回答数、正答率、間違い復習、解答記録は連携したアカウントに保存されます。',
+                    icon: Icons.bar_chart_rounded,
+                  ),
+                ),
+              ),
+            )
+          : banksAsync.when(
+              data: (banks) => _StatsContent(banks: banks, progress: progress),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, stackTrace) => Center(child: Text('$error')),
+            ),
     );
   }
 }

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'navigation_transitions.dart';
 import 'providers.dart';
 import 'screens/home_screen.dart';
+import 'screens/favorites_screen.dart';
 import 'screens/practice_screen.dart';
 import 'screens/records_screen.dart';
 import 'screens/stage_screen.dart';
@@ -68,6 +69,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/review/wrong',
         pageBuilder: (context, state) =>
             directionalRoutePage(state, const WrongReviewScreen()),
+      ),
+      GoRoute(
+        path: '/favorites/:stageId',
+        pageBuilder: (context, state) => directionalRoutePage(
+          state,
+          FavoritesScreen(stageId: state.pathParameters['stageId']!),
+        ),
       ),
       GoRoute(
         path: '/records',

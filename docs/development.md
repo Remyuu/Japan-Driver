@@ -5,7 +5,7 @@
 - Flutter Web
 - Riverpod 状态管理
 - GoRouter 页面路由
-- SharedPreferences 本地进度存储
+- remoooo.com 后端用户数据存储（Firebase ID Token 鉴权）
 - Firebase Auth / Google 登录
 - Google Cloud Translation Basic v2 多语言直连翻译
 - Nginx 静态部署
@@ -59,6 +59,22 @@ cp .firebase-config.example.json .firebase-config.json
 - 修改本地 `scraped/` 后重新部署，线上题库会一起更新。
 - Git push 不会单独上传题库。
 - 在另一台电脑开发时，需要另外准备 `scraped/` 目录。
+
+## 用户数据后端
+
+登录后，客户端通过 `Authorization: Bearer <Firebase ID Token>` 调用
+`https://remoooo.com/jp-driver-api/v1/progress`。后端使用 Google Secure Token
+公钥验证 Token，并只按验签结果中的 `uid` 读取或保存进度、收藏、评论和答题记录。
+客户端传入的用户 ID 不参与服务端数据归属判断。
+
+第一次读取不到云端数据时，客户端会将旧版 SharedPreferences 中当前帐号的
+数据上传到后端，成功后删除旧本地副本。
+
+部署后端：
+
+```bash
+./scripts/deploy_backend_remoooo.sh
+```
 
 题库内容目前用于私有验证。公开发布前需要确认题目、图片和音频的使用授权。
 

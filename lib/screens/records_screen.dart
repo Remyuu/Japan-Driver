@@ -11,6 +11,7 @@ import '../models/translation_language.dart';
 import '../navigation_transitions.dart';
 import '../providers.dart';
 import '../translation_messages.dart';
+import '../widgets/account_gate.dart';
 import '../widgets/ruby_text.dart';
 
 class RecordsScreen extends ConsumerWidget {
@@ -18,6 +19,8 @@ class RecordsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final userAsync = ref.watch(accountUserProvider);
+    final user = userAsync.value;
     final progress = ref
         .watch(progressControllerProvider)
         .when(
@@ -35,26 +38,42 @@ class RecordsScreen extends ConsumerWidget {
           icon: const Icon(Icons.chevron_left_rounded),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        children: [
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 760),
-              child: progress.records.isEmpty
-                  ? const _EmptyRecords()
-                  : Column(
-                      children: [
-                        for (final record in progress.records) ...[
-                          _RecordCard(record: record),
-                          const SizedBox(height: 12),
-                        ],
-                      ],
-                    ),
+      body: userAsync.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : user == null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: AccountRequiredCard(
+                    title: '解答記録にはアカウント連携が必要です',
+                    message: '試験形式の解答カードは連携したアカウントに保存されます。',
+                    icon: Icons.fact_check_outlined,
+                  ),
+                ),
+              ),
+            )
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              children: [
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: progress.records.isEmpty
+                        ? const _EmptyRecords()
+                        : Column(
+                            children: [
+                              for (final record in progress.records) ...[
+                                _RecordCard(record: record),
+                                const SizedBox(height: 12),
+                              ],
+                            ],
+                          ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -66,6 +85,8 @@ class RecordDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final userAsync = ref.watch(accountUserProvider);
+    final user = userAsync.value;
     final progress = ref
         .watch(progressControllerProvider)
         .when(
@@ -89,7 +110,23 @@ class RecordDetailScreen extends ConsumerWidget {
           icon: const Icon(Icons.chevron_left_rounded),
         ),
       ),
-      body: record == null
+      body: userAsync.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : user == null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: AccountRequiredCard(
+                    title: '解答記録にはアカウント連携が必要です',
+                    message: '解答カードを見るには先にアカウントを連携してください。',
+                    icon: Icons.fact_check_outlined,
+                  ),
+                ),
+              ),
+            )
+          : record == null
           ? const Center(child: Text('記録が見つかりません'))
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),

@@ -49,4 +49,19 @@ class AccountRepository {
     }
     await FirebaseAuth.instance.signOut();
   }
+
+  Future<String> getIdToken({bool forceRefresh = false}) async {
+    if (!isConfigured) {
+      throw const AccountAuthException('Googleログインはまだ設定されていません。');
+    }
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw const AccountAuthException('アカウント連携が必要です。');
+    }
+    final token = await user.getIdToken(forceRefresh);
+    if (token == null || token.isEmpty) {
+      throw const AccountAuthException('認証情報を取得できませんでした。');
+    }
+    return token;
+  }
 }

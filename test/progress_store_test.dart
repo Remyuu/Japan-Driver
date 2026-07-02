@@ -139,4 +139,21 @@ void main() {
     expect(removed.commentsByQuestion, isNot(contains('q1')));
     expect(removed.commentsByQuestion['q2'], hasLength(1));
   });
+
+  test('stores favorites independently for each stage', () {
+    final store = ProgressStore.empty()
+        .toggleFavorite(stageId: 'karimen', questionId: 'q1')
+        .toggleFavorite(stageId: 'sotsuken', questionId: 'q2');
+
+    final decoded = ProgressStore.decode(store.encode());
+
+    expect(decoded.favoritesForStage('karimen'), {'q1'});
+    expect(decoded.favoritesForStage('sotsuken'), {'q2'});
+    expect(
+      decoded
+          .toggleFavorite(stageId: 'karimen', questionId: 'q1')
+          .favoritesForStage('karimen'),
+      isEmpty,
+    );
+  });
 }

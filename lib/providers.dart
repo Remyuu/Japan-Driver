@@ -33,7 +33,9 @@ final questionBanksProvider = FutureProvider<List<QuestionBank>>((ref) async {
 });
 
 final progressRepositoryProvider = Provider<ProgressRepository>((ref) {
-  return const ProgressRepository();
+  return ProgressRepository(
+    idTokenProvider: ref.watch(accountRepositoryProvider).getIdToken,
+  );
 });
 
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
@@ -128,9 +130,32 @@ class SettingsController extends AsyncNotifier<AppSettings> {
 }
 
 class ProgressController extends AsyncNotifier<ProgressStore> {
+  String? _userId;
+
   @override
-  Future<ProgressStore> build() {
-    return ref.watch(progressRepositoryProvider).load();
+  Future<ProgressStore> build() async {
+    final user = ref.watch(accountUserProvider).value;
+    _userId = user?.id;
+    if (_userId == null) {
+      return ProgressStore.empty();
+    }
+    return ref.watch(progressRepositoryProvider).load(_userId!);
+  }
+
+  Future<void> _save(ProgressStore store) async {
+    final userId = ref.read(accountUserProvider).value?.id ?? _userId;
+    if (userId == null) {
+      state = AsyncData(ProgressStore.empty());
+      return;
+    }
+    final previous = state;
+    state = AsyncData(store);
+    try {
+      await ref.read(progressRepositoryProvider).save(userId, store);
+    } catch (_) {
+      state = previous;
+      rethrow;
+    }
   }
 
   Future<void> recordAnswer({
@@ -138,35 +163,56 @@ class ProgressController extends AsyncNotifier<ProgressStore> {
     required AnswerChoice selectedAnswer,
     required AnswerChoice correctAnswer,
   }) async {
+    if ((ref.read(accountUserProvider).value?.id ?? _userId) == null) {
+      return;
+    }
     final current = state.value ?? ProgressStore.empty();
     final next = current.recordAnswer(
       questionId: questionId,
       selectedAnswer: selectedAnswer,
       correctAnswer: correctAnswer,
     );
-    state = AsyncData(next);
-    await ref.watch(progressRepositoryProvider).save(next);
+    await _save(next);
   }
 
   Future<void> saveDraft(PracticeDraft draft) async {
+    if ((ref.read(accountUserProvider).value?.id ?? _userId) == null) {
+      return;
+    }
     final current = state.value ?? ProgressStore.empty();
     final next = current.saveDraft(draft);
-    state = AsyncData(next);
-    await ref.watch(progressRepositoryProvider).save(next);
+    await _save(next);
   }
 
   Future<void> removeDraft(String sessionId) async {
+    if ((ref.read(accountUserProvider).value?.id ?? _userId) == null) {
+      return;
+    }
     final current = state.value ?? ProgressStore.empty();
     final next = current.removeDraft(sessionId);
-    state = AsyncData(next);
-    await ref.watch(progressRepositoryProvider).save(next);
+    await _save(next);
   }
 
   Future<void> saveRecord(PracticeRecord record) async {
+    if ((ref.read(accountUserProvider).value?.id ?? _userId) == null) {
+      return;
+    }
     final current = state.value ?? ProgressStore.empty();
     final next = current.addRecord(record);
-    state = AsyncData(next);
-    await ref.watch(progressRepositoryProvider).save(next);
+    await _save(next);
+  }
+
+  Future<void> toggleFavorite({
+    required String stageId,
+    required String questionId,
+  }) async {
+    if ((ref.read(accountUserProvider).value?.id ?? _userId) == null) {
+      return;
+    }
+    final current = state.value ?? ProgressStore.empty();
+    await _save(
+      current.toggleFavorite(stageId: stageId, questionId: questionId),
+    );
   }
 
   Future<void> addComment({
@@ -175,6 +221,10 @@ class ProgressController extends AsyncNotifier<ProgressStore> {
     required String authorLabel,
     String? authorId,
   }) async {
+    final userId = ref.read(accountUserProvider).value?.id ?? _userId;
+    if (userId == null) {
+      return;
+    }
     final createdAt = DateTime.now();
     final current = state.value ?? ProgressStore.empty();
     final next = current.addComment(
@@ -183,24 +233,25 @@ class ProgressController extends AsyncNotifier<ProgressStore> {
         questionId: questionId,
         text: text,
         authorLabel: authorLabel,
-        authorId: authorId,
+        authorId: authorId ?? userId,
         createdAt: createdAt,
       ),
     );
-    state = AsyncData(next);
-    await ref.watch(progressRepositoryProvider).save(next);
+    await _save(next);
   }
 
   Future<void> removeComment({
     required String questionId,
     required String commentId,
   }) async {
+    if ((ref.read(accountUserProvider).value?.id ?? _userId) == null) {
+      return;
+    }
     final current = state.value ?? ProgressStore.empty();
     final next = current.removeComment(
       questionId: questionId,
       commentId: commentId,
     );
-    state = AsyncData(next);
-    await ref.watch(progressRepositoryProvider).save(next);
+    await _save(next);
   }
 }
