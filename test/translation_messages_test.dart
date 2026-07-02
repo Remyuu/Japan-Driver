@@ -13,8 +13,8 @@ void main() {
     expect(TranslationLanguage.vietnamese.retryLabel, 'Thử lại');
   });
 
-  test('explains an undeployed live translation backend per language', () {
-    const error = TranslationException(code: 'not-found');
+  test('explains unavailable Google v2 translation per language', () {
+    const error = TranslationException(code: 'google-v2-403');
 
     expect(
       translationFailureMessage(TranslationLanguage.chinese, error),

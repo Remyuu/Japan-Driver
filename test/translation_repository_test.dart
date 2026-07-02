@@ -1,50 +1,69 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:japan_driver/models/translation_language.dart';
 import 'package:japan_driver/repositories/question_repository.dart';
 import 'package:japan_driver/repositories/translation_repository.dart';
-import 'package:japan_driver/models/translation_language.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
-    'sends the published question and parses a cached translation',
+    'sends a Google Translation v2 request and parses the response',
     () async {
       final question =
           (await const QuestionRepository().loadBanks()).first.questions[1];
       Map<String, Object?>? receivedPayload;
       final repository = TranslationRepository(
-        call: (payload) async {
+        useLocalCache: false,
+        googleTranslateV2Call: (payload) async {
           receivedPayload = payload;
           return {
-            'translation': {'question': '中文题目', 'explanation': '中文解析'},
-            'cached': true,
+            'data': {
+              'translations': [
+                {'translatedText': 'Tom &amp; Jerry must drive safely.'},
+                {'translatedText': 'This is the explanation.'},
+              ],
+            },
           };
         },
       );
 
       final translation = await repository.getQuestionTranslation(
         question,
-        language: TranslationLanguage.vietnamese,
+        language: TranslationLanguage.english,
         generateIfMissing: true,
       );
 
-      expect(receivedPayload?['questionId'], question.canonicalId);
-      expect(receivedPayload?['question'], question.questionText);
-      expect(receivedPayload?['explanation'], question.explanation);
-      expect(receivedPayload?['targetLanguage'], 'vi');
-      expect(receivedPayload?['generateIfMissing'], isTrue);
-      expect(translation?.question, '中文题目');
-      expect(translation?.explanation, '中文解析');
+      expect(receivedPayload?['q'], [
+        question.questionText,
+        question.explanation,
+      ]);
+      expect(receivedPayload?['source'], 'ja');
+      expect(receivedPayload?['target'], 'en');
+      expect(receivedPayload?['format'], 'text');
+      expect(translation?.question, 'Tom & Jerry must drive safely.');
+      expect(translation?.explanation, 'This is the explanation.');
     },
   );
 
   test(
-    'returns null when cache-only lookup has no server translation',
+    'returns null without calling Google when generation is disabled',
     () async {
       final question =
           (await const QuestionRepository().loadBanks()).first.questions[1];
+      var called = false;
       final repository = TranslationRepository(
-        call: (payload) async => {'translation': null, 'cached': false},
+        useLocalCache: false,
+        googleTranslateV2Call: (payload) async {
+          called = true;
+          return {
+            'data': {
+              'translations': [
+                {'translatedText': 'English question'},
+              ],
+            },
+          };
+        },
       );
 
       final translation = await repository.getQuestionTranslation(
@@ -54,6 +73,43 @@ void main() {
       );
 
       expect(translation, isNull);
+      expect(called, isFalse);
     },
   );
+
+  test('caches successful Google v2 translations locally', () async {
+    SharedPreferences.setMockInitialValues({});
+    final question =
+        (await const QuestionRepository().loadBanks()).first.questions[1];
+    var calls = 0;
+    final repository = TranslationRepository(
+      googleTranslateV2Call: (payload) async {
+        calls += 1;
+        return {
+          'data': {
+            'translations': [
+              {'translatedText': 'Câu hỏi tiếng Việt'},
+              {'translatedText': 'Giải thích tiếng Việt'},
+            ],
+          },
+        };
+      },
+    );
+
+    final first = await repository.getQuestionTranslation(
+      question,
+      language: TranslationLanguage.vietnamese,
+      generateIfMissing: true,
+    );
+    final second = await repository.getQuestionTranslation(
+      question,
+      language: TranslationLanguage.vietnamese,
+      generateIfMissing: true,
+    );
+
+    expect(calls, 1);
+    expect(first?.question, 'Câu hỏi tiếng Việt');
+    expect(second?.question, 'Câu hỏi tiếng Việt');
+    expect(second?.explanation, 'Giải thích tiếng Việt');
+  });
 }

@@ -7,8 +7,7 @@
 - GoRouter 页面路由
 - SharedPreferences 本地进度存储
 - Firebase Auth / Google 登录
-- Firebase Callable Functions / Firestore 多语言翻译缓存
-- Google Cloud Translation v3
+- Google Cloud Translation Basic v2 多语言直连翻译
 - Nginx 静态部署
 
 项目优先支持 Web，同时保留 Flutter 的移动端和桌面端复用能力。
@@ -74,7 +73,7 @@ cp .firebase-config.example.json .firebase-config.json
   --dart-define-from-file=.firebase-config.json
 ```
 
-翻译后端的测试与部署参见 [translation_backend.md](translation_backend.md)。
+翻译功能配置参见 [translation_backend.md](translation_backend.md)。当前实现不使用 Firebase Functions；翻译结果缓存在当前浏览器本地。
 
 在本地预览已经构建的版本：
 
@@ -130,6 +129,4 @@ git push
 # 发布当前本地版本
 ./scripts/deploy_remoooo.sh
 
-# 题库发生变化或翻译后端代码更新时
-./scripts/deploy_translation_backend.sh
 ```
