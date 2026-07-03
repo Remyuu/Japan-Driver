@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -18,18 +19,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/',
         pageBuilder: (context, state) =>
-            directionalRoutePage(state, const HomeScreen()),
+            platformRoutePage(state, const HomeScreen()),
       ),
       GoRoute(
         path: '/stage/:stageId',
-        pageBuilder: (context, state) => directionalRoutePage(
+        pageBuilder: (context, state) => platformRoutePage(
           state,
           StageScreen(stageId: state.pathParameters['stageId']!),
         ),
       ),
       GoRoute(
         path: '/stage/:stageId/:sectionId',
-        pageBuilder: (context, state) => directionalRoutePage(
+        pageBuilder: (context, state) => platformRoutePage(
           state,
           StageScreen(
             stageId: state.pathParameters['stageId']!,
@@ -49,7 +50,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           final rangeStep = int.tryParse(
             state.uri.queryParameters['rangeStep'] ?? '',
           );
-          return directionalRoutePage(
+          return platformRoutePage(
             state,
             PracticeScreen(
               bankId: state.pathParameters['bankId']!,
@@ -68,11 +69,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/review/wrong',
         pageBuilder: (context, state) =>
-            directionalRoutePage(state, const WrongReviewScreen()),
+            platformRoutePage(state, const WrongReviewScreen()),
       ),
       GoRoute(
         path: '/favorites/:stageId',
-        pageBuilder: (context, state) => directionalRoutePage(
+        pageBuilder: (context, state) => platformRoutePage(
           state,
           FavoritesScreen(stageId: state.pathParameters['stageId']!),
         ),
@@ -80,11 +81,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/records',
         pageBuilder: (context, state) =>
-            directionalRoutePage(state, const RecordsScreen()),
+            platformRoutePage(state, const RecordsScreen()),
       ),
       GoRoute(
         path: '/records/:recordId',
-        pageBuilder: (context, state) => directionalRoutePage(
+        pageBuilder: (context, state) => platformRoutePage(
           state,
           RecordDetailScreen(
             recordId: Uri.decodeComponent(state.pathParameters['recordId']!),
@@ -94,7 +95,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/stats',
         pageBuilder: (context, state) =>
-            directionalRoutePage(state, const StatsScreen()),
+            platformRoutePage(state, const StatsScreen()),
       ),
     ],
   );
@@ -129,6 +130,9 @@ ThemeData _buildTheme(Brightness brightness) {
   return ThemeData(
     useMaterial3: true,
     fontFamily: 'Hiragino Sans',
+    pageTransitionsTheme: kIsWeb
+        ? webPageTransitionsTheme
+        : const PageTransitionsTheme(),
     scaffoldBackgroundColor: background,
     colorScheme: ColorScheme.fromSeed(
       seedColor: const Color(0xFF2F6F73),
