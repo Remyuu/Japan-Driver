@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'design/liquid_glass.dart';
 import 'navigation_transitions.dart';
 import 'providers.dart';
 import 'screens/home_screen.dart';
@@ -122,10 +123,17 @@ class JapanDriverApp extends ConsumerWidget {
 
 ThemeData _buildTheme(Brightness brightness) {
   final isDark = brightness == Brightness.dark;
-  final background = isDark ? const Color(0xFF111312) : const Color(0xFFFAFAF8);
-  final surface = isDark ? const Color(0xFF1B1E1D) : Colors.white;
-  final foreground = isDark ? const Color(0xFFF3F2EE) : const Color(0xFF1D1D1F);
-  final border = isDark ? const Color(0xFF343938) : const Color(0xFFE3E1DC);
+  final background = isDark ? const Color(0xFF101513) : LiquidColors.paper;
+  final surface = isDark ? const Color(0xFF1B2322) : Colors.white;
+  final foreground = isDark ? const Color(0xFFF3F6F3) : LiquidColors.ink;
+  final border = isDark
+      ? Colors.white.withValues(alpha: 0.12)
+      : const Color(0xFFDCE5E1);
+  final colorScheme = ColorScheme.fromSeed(
+    seedColor: LiquidColors.primary,
+    brightness: brightness,
+    surface: surface,
+  );
 
   return ThemeData(
     useMaterial3: true,
@@ -134,20 +142,27 @@ ThemeData _buildTheme(Brightness brightness) {
         ? webPageTransitionsTheme
         : const PageTransitionsTheme(),
     scaffoldBackgroundColor: background,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: const Color(0xFF2F6F73),
-      brightness: brightness,
-      surface: surface,
-    ),
+    colorScheme: colorScheme,
     appBarTheme: AppBarTheme(
       centerTitle: false,
       elevation: 0,
-      backgroundColor: background,
+      scrolledUnderElevation: 0,
+      backgroundColor: Colors.transparent,
       foregroundColor: foreground,
+      surfaceTintColor: Colors.transparent,
+      titleTextStyle: TextStyle(
+        color: foreground,
+        fontSize: 20,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0,
+      ),
     ),
     cardTheme: CardThemeData(
       elevation: 0,
-      color: surface,
+      color: isDark
+          ? surface.withValues(alpha: 0.78)
+          : surface.withValues(alpha: 0.72),
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
         side: BorderSide(color: border),
@@ -161,6 +176,28 @@ ThemeData _buildTheme(Brightness brightness) {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: SegmentedButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        side: BorderSide(color: border),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: isDark
+          ? Colors.white.withValues(alpha: 0.04)
+          : Colors.white.withValues(alpha: 0.66),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: border),
       ),
     ),
   );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../design/liquid_glass.dart';
 import '../models/progress_store.dart';
 import '../models/question_bank.dart';
 import '../providers.dart';
@@ -21,25 +22,33 @@ class FavoritesScreen extends ConsumerWidget {
       _ => null,
     };
     if (title == null) {
-      return const Scaffold(body: Center(child: Text('お気に入りが見つかりません')));
+      return const Scaffold(
+        body: LiquidBackground(child: Center(child: Text('お気に入りが見つかりません'))),
+      );
     }
 
     final userAsync = ref.watch(accountUserProvider);
     if (userAsync.isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: LiquidBackground(
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
     }
     if (userAsync.value == null) {
       return Scaffold(
         appBar: AppBar(title: Text(title)),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: const AccountRequiredCard(
-                title: 'お気に入りにはアカウント連携が必要です',
-                message: '保存した問題は連携したアカウントごとに管理されます。',
-                icon: Icons.bookmark_outline_rounded,
+        body: LiquidBackground(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: const AccountRequiredCard(
+                  title: 'お気に入りにはアカウント連携が必要です',
+                  message: '保存した問題は連携したアカウントごとに管理されます。',
+                  icon: Icons.bookmark_outline_rounded,
+                ),
               ),
             ),
           ),
@@ -74,10 +83,14 @@ class FavoritesScreen extends ConsumerWidget {
               emptyMessage: 'お気に入りはまだありません',
             );
           },
-          loading: () =>
-              const Scaffold(body: Center(child: CircularProgressIndicator())),
-          error: (error, stackTrace) =>
-              Scaffold(body: Center(child: Text('$error'))),
+          loading: () => const Scaffold(
+            body: LiquidBackground(
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ),
+          error: (error, stackTrace) => Scaffold(
+            body: LiquidBackground(child: Center(child: Text('$error'))),
+          ),
         );
   }
 }

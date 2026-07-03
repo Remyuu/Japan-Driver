@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../design/liquid_glass.dart';
 import '../models/practice_record.dart';
 import '../models/app_settings.dart';
 import '../models/progress_store.dart';
@@ -38,42 +39,44 @@ class RecordsScreen extends ConsumerWidget {
           icon: const Icon(Icons.chevron_left_rounded),
         ),
       ),
-      body: userAsync.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : user == null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 520),
-                  child: AccountRequiredCard(
-                    title: '解答記録にはアカウント連携が必要です',
-                    message: '試験形式の解答カードは連携したアカウントに保存されます。',
-                    icon: Icons.fact_check_outlined,
-                  ),
-                ),
-              ),
-            )
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-              children: [
-                Center(
+      body: LiquidBackground(
+        child: userAsync.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : user == null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 760),
-                    child: progress.records.isEmpty
-                        ? const _EmptyRecords()
-                        : Column(
-                            children: [
-                              for (final record in progress.records) ...[
-                                _RecordCard(record: record),
-                                const SizedBox(height: 12),
-                              ],
-                            ],
-                          ),
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: AccountRequiredCard(
+                      title: '解答記録にはアカウント連携が必要です',
+                      message: '試験形式の解答カードは連携したアカウントに保存されます。',
+                      icon: Icons.fact_check_outlined,
+                    ),
                   ),
                 ),
-              ],
-            ),
+              )
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                children: [
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 840),
+                      child: progress.records.isEmpty
+                          ? const _EmptyRecords()
+                          : Column(
+                              children: [
+                                for (final record in progress.records) ...[
+                                  _RecordCard(record: record),
+                                  const SizedBox(height: 12),
+                                ],
+                              ],
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+      ),
     );
   }
 }
@@ -153,66 +156,64 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
           icon: const Icon(Icons.chevron_left_rounded),
         ),
       ),
-      body: userAsync.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : user == null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 520),
-                  child: AccountRequiredCard(
-                    title: '解答記録にはアカウント連携が必要です',
-                    message: '解答カードを見るには先にアカウントを連携してください。',
-                    icon: Icons.fact_check_outlined,
+      body: LiquidBackground(
+        child: userAsync.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : user == null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: AccountRequiredCard(
+                      title: '解答記録にはアカウント連携が必要です',
+                      message: '解答カードを見るには先にアカウントを連携してください。',
+                      icon: Icons.fact_check_outlined,
+                    ),
                   ),
                 ),
-              ),
-            )
-          : record == null
-          ? const Center(child: Text('記録が見つかりません'))
-          : ListView(
-              controller: _scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-              children: [
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 760),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _RecordSummary(record: record),
-                        const SizedBox(height: 12),
-                        _SavedAnswerSheet(record: record),
-                        const SizedBox(height: 12),
-                        banksAsync.when(
-                          data: (banks) => _RecordQuestionList(
-                            record: record,
-                            banks: banks,
-                            visibleCount: _visibleWrongCount,
-                            showRuby: settings.showRuby,
-                            translationLanguages:
-                                settings.enabledTranslationLanguages,
-                          ),
-                          loading: () => const Card(
-                            child: Padding(
+              )
+            : record == null
+            ? const Center(child: Text('記録が見つかりません'))
+            : ListView(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                children: [
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 840),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _RecordSummary(record: record),
+                          const SizedBox(height: 12),
+                          _SavedAnswerSheet(record: record),
+                          const SizedBox(height: 12),
+                          banksAsync.when(
+                            data: (banks) => _RecordQuestionList(
+                              record: record,
+                              banks: banks,
+                              visibleCount: _visibleWrongCount,
+                              showRuby: settings.showRuby,
+                              translationLanguages:
+                                  settings.enabledTranslationLanguages,
+                            ),
+                            loading: () => const LiquidGlass(
                               padding: EdgeInsets.all(20),
                               child: Center(child: CircularProgressIndicator()),
                             ),
-                          ),
-                          error: (error, stackTrace) => Card(
-                            child: Padding(
+                            error: (error, stackTrace) => LiquidGlass(
                               padding: const EdgeInsets.all(20),
                               child: Text('$error'),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+      ),
     );
   }
 }
@@ -224,47 +225,53 @@ class _RecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () => context.push('/records/${Uri.encodeComponent(record.id)}'),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return LiquidGlass(
+      onTap: () => context.push('/records/${Uri.encodeComponent(record.id)}'),
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          const LiquidIconBadge(
+            icon: Icons.fact_check_outlined,
+            color: LiquidColors.sky,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  record.subtitle,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _formatDate(record.completedAt),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: LiquidColors.muted(context),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    Text(
-                      record.subtitle,
-                      style: Theme.of(context).textTheme.titleMedium,
+                    _SmallPill(label: record.mode == 'exam' ? '試験形式' : '練習'),
+                    _SmallPill(
+                      label: record.mode == 'exam'
+                          ? '${record.scorePoints} / ${record.totalPoints}'
+                          : '${record.correctCount} / ${record.totalCount}',
                     ),
-                    const SizedBox(height: 6),
-                    Text(_formatDate(record.completedAt)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _SmallPill(
-                          label: record.mode == 'exam' ? '試験形式' : '練習',
-                        ),
-                        _SmallPill(
-                          label: record.mode == 'exam'
-                              ? '${record.scorePoints} / ${record.totalPoints}'
-                              : '${record.correctCount} / ${record.totalCount}',
-                        ),
-                        _SmallPill(label: '間違い ${record.wrongCount}'),
-                      ],
-                    ),
+                    _SmallPill(label: '間違い ${record.wrongCount}'),
                   ],
                 ),
-              ),
-              const Icon(Icons.chevron_right_rounded),
-            ],
+              ],
+            ),
           ),
-        ),
+          const SizedBox(width: 8),
+          const Icon(Icons.chevron_right_rounded),
+        ],
       ),
     );
   }
@@ -277,35 +284,52 @@ class _RecordSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              record.subtitle,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(_formatDate(record.completedAt)),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _SmallPill(label: record.mode == 'exam' ? '試験形式' : '練習'),
-                _SmallPill(
-                  label: record.mode == 'exam'
-                      ? '得点 ${record.scorePoints} / ${record.totalPoints}'
-                      : '正解 ${record.correctCount}',
+    return LiquidGlass(
+      padding: const EdgeInsets.all(16),
+      strong: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const LiquidIconBadge(
+                icon: Icons.receipt_long_outlined,
+                color: LiquidColors.primary,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  record.subtitle,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
-                _SmallPill(label: '不正解 ${record.wrongCount}'),
-                _SmallPill(label: '全${record.totalCount}問'),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _formatDate(record.completedAt),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: LiquidColors.muted(context)),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _SmallPill(label: record.mode == 'exam' ? '試験形式' : '練習'),
+              _SmallPill(
+                label: record.mode == 'exam'
+                    ? '得点 ${record.scorePoints} / ${record.totalPoints}'
+                    : '正解 ${record.correctCount}',
+              ),
+              _SmallPill(label: '不正解 ${record.wrongCount}'),
+              _SmallPill(label: '全${record.totalCount}問'),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -318,38 +342,38 @@ class _SavedAnswerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '解答カード',
-                    style: Theme.of(context).textTheme.titleMedium,
+    return LiquidGlass(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '解答カード',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                Text(
-                  record.mode == 'exam'
-                      ? '${record.scorePoints} / ${record.totalPoints}'
-                      : '${record.correctCount} / ${record.totalCount}',
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (var i = 0; i < record.answers.length; i += 1)
-                  _SavedAnswerCell(number: i + 1, answer: record.answers[i]),
-              ],
-            ),
-          ],
-        ),
+              ),
+              Text(
+                record.mode == 'exam'
+                    ? '${record.scorePoints} / ${record.totalPoints}'
+                    : '${record.correctCount} / ${record.totalCount}',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < record.answers.length; i += 1)
+                _SavedAnswerCell(number: i + 1, answer: record.answers[i]),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -364,10 +388,10 @@ class _SavedAnswerCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCorrect = answer.isCorrect;
-    final color = isCorrect ? const Color(0xFF1D7F48) : const Color(0xFFB73A36);
-    final background = isCorrect
-        ? const Color(0xFFEAF6EE)
-        : const Color(0xFFFBEDEC);
+    final color = isCorrect ? LiquidColors.success : LiquidColors.danger;
+    final background = color.withValues(
+      alpha: LiquidColors.isDark(context) ? 0.20 : 0.12,
+    );
 
     return Tooltip(
       message:
@@ -426,11 +450,9 @@ class _RecordQuestionList extends StatelessWidget {
         Text('間違えた問題', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 10),
         if (wrongAnswers.isEmpty)
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(20),
-              child: Text('間違えた問題はありません'),
-            ),
+          const LiquidGlass(
+            padding: EdgeInsets.all(20),
+            child: Text('間違えた問題はありません'),
           ),
         for (final entry in visibleAnswers) ...[
           _RecordQuestionCard(
@@ -490,7 +512,7 @@ class _RecordQuestionCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isCorrect = answer.isCorrect;
-    final color = isCorrect ? const Color(0xFF1D7F48) : const Color(0xFFB73A36);
+    final color = isCorrect ? LiquidColors.success : LiquidColors.danger;
     final question = this.question;
     final translations =
         <TranslationLanguage, AsyncValue<QuestionTranslation?>>{};
@@ -506,113 +528,111 @@ class _RecordQuestionCard extends ConsumerWidget {
       }
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  isCorrect
-                      ? Icons.check_circle_outline_rounded
-                      : Icons.cancel_outlined,
-                  color: color,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '問$number',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: color,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (question == null)
-              Text('問題文を読み込めませんでした（${answer.questionId}）')
-            else ...[
-              RubyText(
-                text: question.questionText,
-                rubyHtml: question.questionRubyHtml,
-                showRuby: showRuby,
-                style: Theme.of(context).textTheme.bodyLarge,
+    return LiquidGlass(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isCorrect
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.cancel_outlined,
+                color: color,
               ),
-              for (final entry in translations.entries) ...[
-                const SizedBox(height: 8),
-                _RecordTranslation(
-                  language: entry.key,
-                  text: entry.value.value?.question,
-                  isLoading: entry.value.isLoading,
-                  error: entry.value.error,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '問$number',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ],
-              if (question.questionImageAssetPaths.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                _RecordImageList(paths: question.questionImageAssetPaths),
-              ],
-              if (question.subquestions.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                for (var i = 0; i < question.subquestions.length; i += 1) ...[
-                  RubyText(
-                    text: '(${i + 1}) ${question.subquestions[i].text}',
-                    rubyHtml: question.subquestions[i].rubyHtml == null
-                        ? null
-                        : '(${i + 1}) ${question.subquestions[i].rubyHtml}',
-                    showRuby: showRuby,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'あなた：${i < answer.selectedAnswers.length ? answer.selectedAnswers[i].label : '-'} / '
-                    '正解：${i < answer.correctAnswers.length ? answer.correctAnswers[i].label : question.subquestions[i].answer.label}',
-                  ),
-                  if (i != question.subquestions.length - 1)
-                    const Divider(height: 24),
-                ],
-              ],
+              ),
             ],
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _SmallPill(
-                  label:
-                      'あなたの答え ${answer.selectedAnswers.map((value) => value.label).join(' / ')}',
-                ),
-                _SmallPill(
-                  label:
-                      '正解 ${answer.correctAnswers.map((value) => value.label).join(' / ')}',
-                ),
-              ],
+          ),
+          const SizedBox(height: 12),
+          if (question == null)
+            Text('問題文を読み込めませんでした（${answer.questionId}）')
+          else ...[
+            RubyText(
+              text: question.questionText,
+              rubyHtml: question.questionRubyHtml,
+              showRuby: showRuby,
+              style: Theme.of(context).textTheme.bodyLarge,
             ),
-            if (question != null && question.explanation.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Text('解説', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 6),
-              RubyText(
-                text: question.explanation,
-                rubyHtml: question.explanationRubyHtml,
-                showRuby: showRuby,
-                style: Theme.of(context).textTheme.bodyMedium,
+            for (final entry in translations.entries) ...[
+              const SizedBox(height: 8),
+              _RecordTranslation(
+                language: entry.key,
+                text: entry.value.value?.question,
+                isLoading: entry.value.isLoading,
+                error: entry.value.error,
               ),
-              for (final entry in translations.entries) ...[
-                const SizedBox(height: 8),
-                _RecordTranslation(
-                  language: entry.key,
-                  text: entry.value.value?.explanation,
-                  isLoading: entry.value.isLoading,
-                  error: entry.value.error,
+            ],
+            if (question.questionImageAssetPaths.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _RecordImageList(paths: question.questionImageAssetPaths),
+            ],
+            if (question.subquestions.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              for (var i = 0; i < question.subquestions.length; i += 1) ...[
+                RubyText(
+                  text: '(${i + 1}) ${question.subquestions[i].text}',
+                  rubyHtml: question.subquestions[i].rubyHtml == null
+                      ? null
+                      : '(${i + 1}) ${question.subquestions[i].rubyHtml}',
+                  showRuby: showRuby,
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
+                const SizedBox(height: 6),
+                Text(
+                  'あなた：${i < answer.selectedAnswers.length ? answer.selectedAnswers[i].label : '-'} / '
+                  '正解：${i < answer.correctAnswers.length ? answer.correctAnswers[i].label : question.subquestions[i].answer.label}',
+                ),
+                if (i != question.subquestions.length - 1)
+                  const Divider(height: 24),
               ],
             ],
           ],
-        ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _SmallPill(
+                label:
+                    'あなたの答え ${answer.selectedAnswers.map((value) => value.label).join(' / ')}',
+              ),
+              _SmallPill(
+                label:
+                    '正解 ${answer.correctAnswers.map((value) => value.label).join(' / ')}',
+              ),
+            ],
+          ),
+          if (question != null && question.explanation.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text('解説', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 6),
+            RubyText(
+              text: question.explanation,
+              rubyHtml: question.explanationRubyHtml,
+              showRuby: showRuby,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            for (final entry in translations.entries) ...[
+              const SizedBox(height: 8),
+              _RecordTranslation(
+                language: entry.key,
+                text: entry.value.value?.explanation,
+                isLoading: entry.value.isLoading,
+                error: entry.value.error,
+              ),
+            ],
+          ],
+        ],
       ),
     );
   }
@@ -633,22 +653,30 @@ class _RecordTranslation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final color = switch (language) {
+      TranslationLanguage.chinese => LiquidColors.vermilion,
+      TranslationLanguage.english => LiquidColors.sky,
+      TranslationLanguage.vietnamese => LiquidColors.amber,
+    };
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: colors.secondaryContainer.withValues(alpha: 0.45),
+        color: color.withValues(
+          alpha: LiquidColors.isDark(context) ? 0.16 : 0.10,
+        ),
         borderRadius: BorderRadius.circular(8),
+        border: Border(left: BorderSide(color: color, width: 3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             language.displayLabel,
-            style: Theme.of(
-              context,
-            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 4),
           if (text != null)
@@ -688,7 +716,7 @@ class _RecordImageList extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFE3E1DC)),
+                    border: Border.all(color: LiquidColors.hairline(context)),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Image.asset(
@@ -719,7 +747,8 @@ class _SmallPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFE3E1DC)),
+        color: LiquidColors.glassFill(context),
+        border: Border.all(color: LiquidColors.hairline(context)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
@@ -735,17 +764,31 @@ class _EmptyRecords extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('まだ記録がありません', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            const Text('一通り答えると、ここに解答カードが保存されます。'),
-          ],
-        ),
+    return LiquidGlass(
+      padding: const EdgeInsets.all(20),
+      strong: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const LiquidIconBadge(
+            icon: Icons.fact_check_outlined,
+            color: LiquidColors.sky,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'まだ記録がありません',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '一通り答えると、ここに解答カードが保存されます。',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: LiquidColors.muted(context),
+            ),
+          ),
+        ],
       ),
     );
   }

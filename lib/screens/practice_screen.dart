@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../account_access.dart';
+import '../design/liquid_glass.dart';
 import '../models/answer_choice.dart';
 import '../models/app_settings.dart';
 import '../models/practice_draft.dart';
@@ -684,23 +685,68 @@ class _QuestionPracticeRunnerState
     }
     final action = await showDialog<_ExitAction>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('終了しますか'),
-        content: const Text('途中までの回答を保存できます。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(_ExitAction.cancel),
-            child: const Text('キャンセル'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(_ExitAction.discard),
-            child: const Text('保存しない'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(_ExitAction.save),
-            child: const Text('保存して終了'),
-          ),
-        ],
+      barrierColor: Colors.black.withValues(alpha: 0.18),
+      builder: (context) => LiquidDialogPanel(
+        alignment: Alignment.center,
+        insetPadding: const EdgeInsets.all(24),
+        maxWidth: 400,
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const LiquidIconBadge(
+                  icon: Icons.exit_to_app_rounded,
+                  color: LiquidColors.vermilion,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '終了しますか',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '途中までの回答を保存できます。',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: LiquidColors.muted(context),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.of(context).pop(_ExitAction.cancel),
+                    child: const Text('キャンセル'),
+                  ),
+                  OutlinedButton(
+                    onPressed: () =>
+                        Navigator.of(context).pop(_ExitAction.discard),
+                    child: const Text('保存しない'),
+                  ),
+                  FilledButton(
+                    onPressed: () =>
+                        Navigator.of(context).pop(_ExitAction.save),
+                    child: const Text('保存して終了'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
     switch (action) {
@@ -802,141 +848,143 @@ class _QuestionPracticeRunnerState
           const SizedBox(width: 4),
         ],
       ),
-      body: question == null
-          ? _EmptyPractice(message: widget.emptyMessage)
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 960;
-                final content = isWide
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: _QuestionPanel(
-                                  question: question,
-                                  title: widget.subtitle,
-                                  index: _index,
-                                  total: widget.questions.length,
-                                  selectedAnswer: selectedAnswer,
-                                  revealAnswer: _revealAnswer,
-                                  showRuby: settings.showRuby,
-                                  translations: translations,
-                                  retryTranslations: retryTranslations,
-                                  canChangeAnswer:
-                                      !_examSubmitted &&
-                                      widget.feedbackMode ==
-                                          PracticeFeedbackMode.exam,
-                                  canGoNext: _canGoNext,
-                                  nextLabel: _nextLabel,
-                                  onChoose: (answerIndex, choice) =>
-                                      _choose(question, answerIndex, choice),
-                                  onPrevious: _previous,
-                                  onNext: () => _next(),
+      body: LiquidBackground(
+        child: question == null
+            ? _EmptyPractice(message: widget.emptyMessage)
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWide = constraints.maxWidth >= 960;
+                  final content = isWide
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: _QuestionPanel(
+                                    question: question,
+                                    title: widget.subtitle,
+                                    index: _index,
+                                    total: widget.questions.length,
+                                    selectedAnswer: selectedAnswer,
+                                    revealAnswer: _revealAnswer,
+                                    showRuby: settings.showRuby,
+                                    translations: translations,
+                                    retryTranslations: retryTranslations,
+                                    canChangeAnswer:
+                                        !_examSubmitted &&
+                                        widget.feedbackMode ==
+                                            PracticeFeedbackMode.exam,
+                                    canGoNext: _canGoNext,
+                                    nextLabel: _nextLabel,
+                                    onChoose: (answerIndex, choice) =>
+                                        _choose(question, answerIndex, choice),
+                                    onPrevious: _previous,
+                                    onNext: () => _next(),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 20),
-                              SizedBox(
-                                width: 340,
-                                child: _SidePanel(
-                                  question: question,
-                                  selectedAnswer: selectedAnswer,
-                                  revealAnswer: _revealAnswer,
-                                  showRuby: settings.showRuby,
-                                  translations: translations,
-                                  retryTranslations: retryTranslations,
-                                  examSummary: _examSubmitted
-                                      ? '結果 $_scorePoints / $_totalPoints'
-                                      : null,
-                                  index: _index,
-                                  total: widget.questions.length,
-                                  detailMode: _detailMode,
-                                  commentCount: commentCount,
-                                  onDetailModeChanged: (mode) {
-                                    setState(() => _detailMode = mode);
-                                  },
+                                const SizedBox(width: 20),
+                                SizedBox(
+                                  width: 340,
+                                  child: _SidePanel(
+                                    question: question,
+                                    selectedAnswer: selectedAnswer,
+                                    revealAnswer: _revealAnswer,
+                                    showRuby: settings.showRuby,
+                                    translations: translations,
+                                    retryTranslations: retryTranslations,
+                                    examSummary: _examSubmitted
+                                        ? '結果 $_scorePoints / $_totalPoints'
+                                        : null,
+                                    index: _index,
+                                    total: widget.questions.length,
+                                    detailMode: _detailMode,
+                                    commentCount: commentCount,
+                                    onDetailModeChanged: (mode) {
+                                      setState(() => _detailMode = mode);
+                                    },
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          _AnswerSheetCard(
-                            questions: widget.questions,
-                            answers: _selectedAnswers,
-                            currentIndex: _index,
-                            revealAnswer: _revealAnswer,
-                            onJumpToQuestion: _jumpToQuestion,
-                          ),
-                        ],
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _QuestionPanel(
-                            question: question,
-                            title: widget.subtitle,
-                            index: _index,
-                            total: widget.questions.length,
-                            selectedAnswer: selectedAnswer,
-                            revealAnswer: _revealAnswer,
-                            showRuby: settings.showRuby,
-                            translations: translations,
-                            retryTranslations: retryTranslations,
-                            canChangeAnswer:
-                                !_examSubmitted &&
-                                widget.feedbackMode ==
-                                    PracticeFeedbackMode.exam,
-                            canGoNext: _canGoNext,
-                            nextLabel: _nextLabel,
-                            onChoose: (answerIndex, choice) =>
-                                _choose(question, answerIndex, choice),
-                            onPrevious: _previous,
-                            onNext: () => _next(),
-                          ),
-                          const SizedBox(height: 12),
-                          if (_examSubmitted) ...[
-                            _ExamSummaryCard(
-                              text: '結果 $_scorePoints / $_totalPoints',
+                              ],
                             ),
                             const SizedBox(height: 12),
+                            _AnswerSheetCard(
+                              questions: widget.questions,
+                              answers: _selectedAnswers,
+                              currentIndex: _index,
+                              revealAnswer: _revealAnswer,
+                              onJumpToQuestion: _jumpToQuestion,
+                            ),
                           ],
-                          _QuestionDetailPanel(
-                            question: question,
-                            selectedAnswer: selectedAnswer,
-                            revealAnswer: _revealAnswer,
-                            showRuby: settings.showRuby,
-                            translations: translations,
-                            retryTranslations: retryTranslations,
-                            mode: _detailMode,
-                            commentCount: commentCount,
-                            onModeChanged: (mode) {
-                              setState(() => _detailMode = mode);
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          _AnswerSheetCard(
-                            questions: widget.questions,
-                            answers: _selectedAnswers,
-                            currentIndex: _index,
-                            revealAnswer: _revealAnswer,
-                            onJumpToQuestion: _jumpToQuestion,
-                          ),
-                        ],
-                      );
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _QuestionPanel(
+                              question: question,
+                              title: widget.subtitle,
+                              index: _index,
+                              total: widget.questions.length,
+                              selectedAnswer: selectedAnswer,
+                              revealAnswer: _revealAnswer,
+                              showRuby: settings.showRuby,
+                              translations: translations,
+                              retryTranslations: retryTranslations,
+                              canChangeAnswer:
+                                  !_examSubmitted &&
+                                  widget.feedbackMode ==
+                                      PracticeFeedbackMode.exam,
+                              canGoNext: _canGoNext,
+                              nextLabel: _nextLabel,
+                              onChoose: (answerIndex, choice) =>
+                                  _choose(question, answerIndex, choice),
+                              onPrevious: _previous,
+                              onNext: () => _next(),
+                            ),
+                            const SizedBox(height: 12),
+                            if (_examSubmitted) ...[
+                              _ExamSummaryCard(
+                                text: '結果 $_scorePoints / $_totalPoints',
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+                            _QuestionDetailPanel(
+                              question: question,
+                              selectedAnswer: selectedAnswer,
+                              revealAnswer: _revealAnswer,
+                              showRuby: settings.showRuby,
+                              translations: translations,
+                              retryTranslations: retryTranslations,
+                              mode: _detailMode,
+                              commentCount: commentCount,
+                              onModeChanged: (mode) {
+                                setState(() => _detailMode = mode);
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            _AnswerSheetCard(
+                              questions: widget.questions,
+                              answers: _selectedAnswers,
+                              currentIndex: _index,
+                              revealAnswer: _revealAnswer,
+                              onJumpToQuestion: _jumpToQuestion,
+                            ),
+                          ],
+                        );
 
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1160),
-                      child: content,
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1160),
+                        child: content,
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
+      ),
     );
   }
 }
@@ -980,85 +1028,84 @@ class _QuestionPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(child: Text(title, style: textTheme.titleMedium)),
-                Text('${index + 1} / $total'),
-              ],
-            ),
-            const SizedBox(height: 10),
-            LinearProgressIndicator(value: (index + 1) / total),
-            const SizedBox(height: 22),
-            RubyText(
-              text: question.questionText,
-              rubyHtml: question.questionRubyHtml,
-              showRuby: showRuby,
-              style: textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0,
-              ),
-            ),
-            for (final entry in translations.entries) ...[
-              const SizedBox(height: 14),
-              _TranslationCard(
-                language: entry.key,
-                text: entry.value.value.question,
-                isLoading: entry.value.isLoading,
-                error: entry.value.error,
-                onRetry: retryTranslations[entry.key],
-              ),
+    return LiquidGlass(
+      padding: const EdgeInsets.all(20),
+      strong: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(title, style: textTheme.titleMedium)),
+              Text('${index + 1} / $total'),
             ],
-            if (question.questionImageAssetPaths.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              _ImageList(paths: question.questionImageAssetPaths),
-            ],
-            const SizedBox(height: 24),
-            if (question.subquestions.isEmpty)
-              _AnswerButtonPair(
-                selectedAnswer: selectedAnswer?[0],
-                correctAnswer: question.answer,
-                revealAnswer: revealAnswer,
-                canChangeAnswer: canChangeAnswer,
-                onChoose: (choice) => onChoose(0, choice),
-              )
-            else
-              for (var i = 0; i < question.subquestions.length; i += 1) ...[
-                _SubquestionCard(
-                  number: i + 1,
-                  subquestion: question.subquestions[i],
-                  selectedAnswer: selectedAnswer?[i],
-                  revealAnswer: revealAnswer,
-                  showRuby: showRuby,
-                  canChangeAnswer: canChangeAnswer,
-                  onChoose: (choice) => onChoose(i, choice),
-                ),
-                if (i != question.subquestions.length - 1)
-                  const SizedBox(height: 12),
-              ],
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                OutlinedButton.icon(
-                  onPressed: index == 0 ? null : onPrevious,
-                  icon: const Icon(Icons.chevron_left_rounded),
-                  label: const Text('前へ'),
-                ),
-                const Spacer(),
-                FilledButton.icon(
-                  onPressed: canGoNext ? onNext : null,
-                  icon: const Icon(Icons.chevron_right_rounded),
-                  label: Text(nextLabel),
-                ),
-              ],
+          ),
+          const SizedBox(height: 10),
+          LinearProgressIndicator(value: (index + 1) / total),
+          const SizedBox(height: 22),
+          RubyText(
+            text: question.questionText,
+            rubyHtml: question.questionRubyHtml,
+            showRuby: showRuby,
+            style: textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0,
+            ),
+          ),
+          for (final entry in translations.entries) ...[
+            const SizedBox(height: 14),
+            _TranslationCard(
+              language: entry.key,
+              text: entry.value.value.question,
+              isLoading: entry.value.isLoading,
+              error: entry.value.error,
+              onRetry: retryTranslations[entry.key],
             ),
           ],
-        ),
+          if (question.questionImageAssetPaths.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            _ImageList(paths: question.questionImageAssetPaths),
+          ],
+          const SizedBox(height: 24),
+          if (question.subquestions.isEmpty)
+            _AnswerButtonPair(
+              selectedAnswer: selectedAnswer?[0],
+              correctAnswer: question.answer,
+              revealAnswer: revealAnswer,
+              canChangeAnswer: canChangeAnswer,
+              onChoose: (choice) => onChoose(0, choice),
+            )
+          else
+            for (var i = 0; i < question.subquestions.length; i += 1) ...[
+              _SubquestionCard(
+                number: i + 1,
+                subquestion: question.subquestions[i],
+                selectedAnswer: selectedAnswer?[i],
+                revealAnswer: revealAnswer,
+                showRuby: showRuby,
+                canChangeAnswer: canChangeAnswer,
+                onChoose: (choice) => onChoose(i, choice),
+              ),
+              if (i != question.subquestions.length - 1)
+                const SizedBox(height: 12),
+            ],
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: index == 0 ? null : onPrevious,
+                icon: const Icon(Icons.chevron_left_rounded),
+                label: const Text('前へ'),
+              ),
+              const Spacer(),
+              FilledButton.icon(
+                onPressed: canGoNext ? onNext : null,
+                icon: const Icon(Icons.chevron_right_rounded),
+                label: Text(nextLabel),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1087,9 +1134,9 @@ class _SubquestionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        border: Border.all(color: const Color(0xFFE3E1DC)),
-        borderRadius: BorderRadius.circular(10),
+        color: LiquidColors.glassFill(context, strong: true),
+        border: Border.all(color: LiquidColors.hairline(context)),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1195,29 +1242,30 @@ class _AnswerButton extends StatelessWidget {
     final answered = selectedAnswer != null;
     final selected = selectedAnswer == choice;
     final isCorrectChoice = correctAnswer == choice;
-    final colorScheme = Theme.of(context).colorScheme;
-    final surface = colorScheme.surface;
+    final surface = LiquidColors.glassFill(context, strong: true);
     final borderColor = !answered
-        ? colorScheme.onSurface
+        ? LiquidColors.primary.withValues(
+            alpha: LiquidColors.isDark(context) ? 0.34 : 0.26,
+          )
         : !revealAnswer
         ? selected
-              ? const Color(0xFF2F6F73)
-              : const Color(0xFFE3E1DC)
+              ? LiquidColors.primary
+              : LiquidColors.hairline(context)
         : isCorrectChoice
-        ? const Color(0xFF1D7F48)
+        ? LiquidColors.success
         : selected
-        ? const Color(0xFFB73A36)
-        : const Color(0xFFE3E1DC);
+        ? LiquidColors.danger
+        : LiquidColors.hairline(context);
     final background = !answered
         ? surface
         : !revealAnswer
         ? selected
-              ? const Color(0xFFE8F3F3)
+              ? LiquidColors.primary.withValues(alpha: 0.12)
               : surface
         : isCorrectChoice
-        ? const Color(0xFFEAF6EE)
+        ? LiquidColors.success.withValues(alpha: 0.12)
         : selected
-        ? const Color(0xFFFBEDEC)
+        ? LiquidColors.danger.withValues(alpha: 0.12)
         : surface;
 
     return InkWell(
@@ -1261,17 +1309,21 @@ class _TranslationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final color = switch (language) {
+      TranslationLanguage.chinese => LiquidColors.vermilion,
+      TranslationLanguage.english => LiquidColors.sky,
+      TranslationLanguage.vietnamese => LiquidColors.amber,
+    };
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(8),
-        border: Border(
-          left: BorderSide(color: colorScheme.secondary, width: 3),
+        color: color.withValues(
+          alpha: LiquidColors.isDark(context) ? 0.16 : 0.10,
         ),
+        borderRadius: BorderRadius.circular(8),
+        border: Border(left: BorderSide(color: color, width: 3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1279,7 +1331,7 @@ class _TranslationCard extends StatelessWidget {
           Text(
             language.displayLabel,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: colorScheme.onSecondaryContainer,
+              color: color,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -1348,30 +1400,47 @@ class _SidePanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('進捗', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 12),
-                LinearProgressIndicator(value: (index + 1) / total),
-                const SizedBox(height: 10),
-                Text('${index + 1} / $total'),
-                if (question.workbookDisplayNo != null ||
-                    question.sequence != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    [
-                      if (question.workbookDisplayNo != null)
-                        '第${question.workbookDisplayNo}回',
-                      if (question.sequence != null) '問${question.sequence}',
-                    ].join(' / '),
+        LiquidGlass(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const LiquidIconBadge(
+                    icon: Icons.timeline_rounded,
+                    color: LiquidColors.primary,
+                    size: 34,
                   ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '進捗',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Text('${index + 1} / $total'),
                 ],
+              ),
+              const SizedBox(height: 12),
+              LinearProgressIndicator(value: (index + 1) / total),
+              const SizedBox(height: 10),
+              if (question.workbookDisplayNo != null ||
+                  question.sequence != null) ...[
+                Text(
+                  [
+                    if (question.workbookDisplayNo != null)
+                      '第${question.workbookDisplayNo}回',
+                    if (question.sequence != null) '問${question.sequence}',
+                  ].join(' / '),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: LiquidColors.muted(context),
+                  ),
+                ),
               ],
-            ),
+            ],
           ),
         ),
         const SizedBox(height: 12),
@@ -1506,81 +1575,79 @@ class _ResultPanel extends StatelessWidget {
     }
 
     final isCorrect = question.isResponseCorrect(response);
-    final color = isCorrect ? const Color(0xFF1D7F48) : const Color(0xFFB73A36);
+    final color = isCorrect ? LiquidColors.success : LiquidColors.danger;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  isCorrect
-                      ? Icons.check_circle_outline_rounded
-                      : Icons.cancel_outlined,
+    return LiquidGlass(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isCorrect
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.cancel_outlined,
+                color: color,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                isCorrect ? '正解' : '不正解',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: color,
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  isCorrect ? '正解' : '不正解',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'あなたの答え：${_answerLabels(response)}\n'
-              '答え：${_correctAnswerLabels(question)}',
-            ),
-            if (question.explanation.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              RubyText(
-                text: question.explanation,
-                rubyHtml: question.explanationRubyHtml,
-                showRuby: showRuby,
-                style: Theme.of(context).textTheme.bodyLarge,
               ),
             ],
-            if (question.explanation.isNotEmpty)
-              for (final entry in translations.entries) ...[
-                const SizedBox(height: 12),
-                _TranslationCard(
-                  language: entry.key,
-                  text: entry.value.value.explanation,
-                  isLoading: entry.value.isLoading,
-                  error: entry.value.error,
-                  onRetry: retryTranslations[entry.key],
-                ),
-              ],
-            if (question.explanationImageAssetPaths.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              _ImageList(paths: question.explanationImageAssetPaths),
-            ],
-            if (question.textbookRef != null) ...[
-              const SizedBox(height: 14),
-              Text(question.textbookRef!),
-            ],
-            if (question.schoolAccuracyRate != null ||
-                question.nationwideAccuracyRate != null) ...[
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  if (question.schoolAccuracyRate != null)
-                    _SmallPill(label: '教習所内 ${question.schoolAccuracyRate}%'),
-                  if (question.nationwideAccuracyRate != null)
-                    _SmallPill(label: '全国 ${question.nationwideAccuracyRate}%'),
-                ],
-              ),
-            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'あなたの答え：${_answerLabels(response)}\n'
+            '答え：${_correctAnswerLabels(question)}',
+          ),
+          if (question.explanation.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            RubyText(
+              text: question.explanation,
+              rubyHtml: question.explanationRubyHtml,
+              showRuby: showRuby,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
           ],
-        ),
+          if (question.explanation.isNotEmpty)
+            for (final entry in translations.entries) ...[
+              const SizedBox(height: 12),
+              _TranslationCard(
+                language: entry.key,
+                text: entry.value.value.explanation,
+                isLoading: entry.value.isLoading,
+                error: entry.value.error,
+                onRetry: retryTranslations[entry.key],
+              ),
+            ],
+          if (question.explanationImageAssetPaths.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _ImageList(paths: question.explanationImageAssetPaths),
+          ],
+          if (question.textbookRef != null) ...[
+            const SizedBox(height: 14),
+            Text(question.textbookRef!),
+          ],
+          if (question.schoolAccuracyRate != null ||
+              question.nationwideAccuracyRate != null) ...[
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (question.schoolAccuracyRate != null)
+                  _SmallPill(label: '教習所内 ${question.schoolAccuracyRate}%'),
+                if (question.nationwideAccuracyRate != null)
+                  _SmallPill(label: '全国 ${question.nationwideAccuracyRate}%'),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -1709,7 +1776,7 @@ class _CommentPanelState extends ConsumerState<_CommentPanel> {
                   onDelete: () => _removeComment(comments[i]),
                 ),
                 if (i != comments.length - 1)
-                  const Divider(height: 24, color: Color(0xFFE3E1DC)),
+                  Divider(height: 24, color: LiquidColors.hairline(context)),
               ],
             if (comments.isNotEmpty) const SizedBox(height: 16),
             TextField(
@@ -1816,16 +1883,23 @@ class _ExamSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            const Icon(Icons.fact_check_outlined),
-            const SizedBox(width: 10),
-            Text(text, style: Theme.of(context).textTheme.titleMedium),
-          ],
-        ),
+    return LiquidGlass(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          const LiquidIconBadge(
+            icon: Icons.fact_check_outlined,
+            color: LiquidColors.primary,
+            size: 34,
+          ),
+          const SizedBox(width: 10),
+          Text(
+            text,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ],
       ),
     );
   }
@@ -1840,8 +1914,10 @@ class _TimerBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F3F3),
-        border: Border.all(color: const Color(0xFF2F6F73)),
+        color: LiquidColors.primary.withValues(
+          alpha: LiquidColors.isDark(context) ? 0.24 : 0.12,
+        ),
+        border: Border.all(color: LiquidColors.primary.withValues(alpha: 0.26)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
@@ -1886,90 +1962,85 @@ class _PracticeSettingsButton extends ConsumerWidget {
                   settingsControllerProvider.notifier,
                 );
 
-                return Dialog(
-                  alignment: Alignment.topRight,
-                  insetPadding: const EdgeInsets.fromLTRB(16, 56, 16, 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 340),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                return LiquidDialogPanel(
+                  maxWidth: 360,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  '設定',
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleMedium,
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: '閉じる',
-                                onPressed: () => Navigator.of(context).pop(),
-                                icon: const Icon(Icons.close_rounded),
-                              ),
-                            ],
+                          const LiquidIconBadge(
+                            icon: Icons.tune_rounded,
+                            color: LiquidColors.primary,
+                            size: 34,
                           ),
-                          const SizedBox(height: 8),
-                          SegmentedButton<bool>(
-                            segments: const [
-                              ButtonSegment(
-                                value: false,
-                                icon: Icon(Icons.light_mode_outlined),
-                                label: Text('明るい'),
-                              ),
-                              ButtonSegment(
-                                value: true,
-                                icon: Icon(Icons.dark_mode_outlined),
-                                label: Text('暗い'),
-                              ),
-                            ],
-                            selected: {settings.darkMode},
-                            onSelectionChanged: (values) {
-                              controller.setDarkMode(values.single);
-                            },
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '設定',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
                           ),
-                          const SizedBox(height: 8),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('自動で次の問題へ'),
-                            value: settings.autoAdvance,
-                            onChanged: controller.setAutoAdvance,
-                          ),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('ふりがなを表示'),
-                            value: settings.showRuby,
-                            onChanged: controller.setShowRuby,
-                          ),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('显示中文翻译'),
-                            value: settings.showChinese,
-                            onChanged: controller.setShowChinese,
-                          ),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('Show English translation'),
-                            value: settings.showEnglish,
-                            onChanged: controller.setShowEnglish,
-                          ),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('Hiển thị bản dịch tiếng Việt'),
-                            value: settings.showVietnamese,
-                            onChanged: controller.setShowVietnamese,
+                          IconButton(
+                            tooltip: '閉じる',
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.close_rounded),
                           ),
                         ],
                       ),
-                    ),
+                      const SizedBox(height: 8),
+                      SegmentedButton<bool>(
+                        segments: const [
+                          ButtonSegment(
+                            value: false,
+                            icon: Icon(Icons.light_mode_outlined),
+                            label: Text('明るい'),
+                          ),
+                          ButtonSegment(
+                            value: true,
+                            icon: Icon(Icons.dark_mode_outlined),
+                            label: Text('暗い'),
+                          ),
+                        ],
+                        selected: {settings.darkMode},
+                        onSelectionChanged: (values) {
+                          controller.setDarkMode(values.single);
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('自動で次の問題へ'),
+                        value: settings.autoAdvance,
+                        onChanged: controller.setAutoAdvance,
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('ふりがなを表示'),
+                        value: settings.showRuby,
+                        onChanged: controller.setShowRuby,
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('显示中文翻译'),
+                        value: settings.showChinese,
+                        onChanged: controller.setShowChinese,
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Show English translation'),
+                        value: settings.showEnglish,
+                        onChanged: controller.setShowEnglish,
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Hiển thị bản dịch tiếng Việt'),
+                        value: settings.showVietnamese,
+                        onChanged: controller.setShowVietnamese,
+                      ),
+                    ],
                   ),
                 );
               },
@@ -2079,26 +2150,26 @@ class _AnswerSheetCell extends StatelessWidget {
     final background = !answered
         ? surface
         : !revealAnswer
-        ? const Color(0xFFE8F3F3)
+        ? LiquidColors.primary.withValues(alpha: 0.12)
         : isCorrect
-        ? const Color(0xFFEAF6EE)
-        : const Color(0xFFFBEDEC);
+        ? LiquidColors.success.withValues(alpha: 0.12)
+        : LiquidColors.danger.withValues(alpha: 0.12);
     final borderColor = isCurrent
         ? colorScheme.onSurface
         : !answered
-        ? const Color(0xFFE3E1DC)
+        ? LiquidColors.hairline(context)
         : !revealAnswer
-        ? const Color(0xFF2F6F73)
+        ? LiquidColors.primary
         : isCorrect
-        ? const Color(0xFF1D7F48)
-        : const Color(0xFFB73A36);
+        ? LiquidColors.success
+        : LiquidColors.danger;
     final textColor = !answered
         ? colorScheme.onSurface
         : !revealAnswer
-        ? const Color(0xFF2F6F73)
+        ? LiquidColors.primary
         : isCorrect
-        ? const Color(0xFF1D7F48)
-        : const Color(0xFFB73A36);
+        ? LiquidColors.success
+        : LiquidColors.danger;
 
     return Tooltip(
       message: answered
@@ -2149,7 +2220,7 @@ class _ImageList extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFE3E1DC)),
+                    border: Border.all(color: LiquidColors.hairline(context)),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Image.asset(
@@ -2180,7 +2251,7 @@ class _SmallPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFE3E1DC)),
+        border: Border.all(color: LiquidColors.hairline(context)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(

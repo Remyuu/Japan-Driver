@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../account_access.dart';
+import '../design/liquid_glass.dart';
 import '../models/practice_draft.dart';
 import '../models/progress_store.dart';
 import '../models/question_bank.dart';
@@ -37,7 +38,7 @@ class StageScreen extends ConsumerWidget {
             icon: const Icon(Icons.chevron_left_rounded),
           ),
         ),
-        body: _StageMenuContent(config: config),
+        body: LiquidBackground(child: _StageMenuContent(config: config)),
       );
     }
 
@@ -61,17 +62,19 @@ class StageScreen extends ConsumerWidget {
           icon: const Icon(Icons.chevron_left_rounded),
         ),
       ),
-      body: banksAsync.when(
-        data: (banks) => _StageDetailContent(
-          config: config,
-          section: section,
-          banks: banks,
-          progress: progress,
-          canTrackProgress: user != null && !userAsync.isLoading,
-          onAccountRequired: () => showAccountDialog(context, ref),
+      body: LiquidBackground(
+        child: banksAsync.when(
+          data: (banks) => _StageDetailContent(
+            config: config,
+            section: section,
+            banks: banks,
+            progress: progress,
+            canTrackProgress: user != null && !userAsync.isLoading,
+            onAccountRequired: () => showAccountDialog(context, ref),
+          ),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) => Center(child: Text('$error')),
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(child: Text('$error')),
       ),
     );
   }
@@ -87,50 +90,171 @@ class _StageMenuContent extends ConsumerWidget {
     final userAsync = ref.watch(accountUserProvider);
     final hasAccount = userAsync.value != null;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
         Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
+            constraints: const BoxConstraints(maxWidth: 920),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(config.subtitle),
+                _StageHeader(config: config),
                 const SizedBox(height: 18),
-                Card(
-                  child: Column(
-                    children: [
-                      for (
-                        var i = 0;
-                        i < _StageSection.values.length;
-                        i += 1
-                      ) ...[
-                        _StageSectionOption(
-                          section: _StageSection.values[i],
-                          isLocked:
-                              !hasAccount &&
-                              _StageSection.values[i] != _StageSection.oneToOne,
-                          onTap: () {
-                            final section = _StageSection.values[i];
-                            if (!hasAccount &&
-                                section != _StageSection.oneToOne) {
-                              showAccountDialog(context, ref);
-                              return;
-                            }
-                            context.push('/stage/${config.id}/${section.id}');
-                          },
-                        ),
-                        if (i != _StageSection.values.length - 1)
-                          const Divider(height: 1, color: Color(0xFFE3E1DC)),
+                const LiquidSectionLabel(
+                  title: '練習モード',
+                  subtitle: '一問一答、試験形式、項目別、苦手問題から選びます。',
+                ),
+                const SizedBox(height: 12),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isWide = constraints.maxWidth >= 760;
+                    final width = isWide
+                        ? (constraints.maxWidth - 12) / 2
+                        : constraints.maxWidth;
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        for (final section in _StageSection.values)
+                          SizedBox(
+                            width: width,
+                            child: _StageSectionOption(
+                              section: section,
+                              isLocked:
+                                  !hasAccount &&
+                                  section != _StageSection.oneToOne,
+                              onTap: () {
+                                if (!hasAccount &&
+                                    section != _StageSection.oneToOne) {
+                                  showAccountDialog(context, ref);
+                                  return;
+                                }
+                                context.push(
+                                  '/stage/${config.id}/${section.id}',
+                                );
+                              },
+                            ),
+                          ),
                       ],
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ],
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _StageHeader extends StatelessWidget {
+  const _StageHeader({required this.config, this.section});
+
+  final _StageConfig config;
+  final _StageSection? section;
+
+  @override
+  Widget build(BuildContext context) {
+    final isKarimen = config.id == 'karimen';
+    final color = isKarimen ? LiquidColors.primary : LiquidColors.sky;
+
+    return LiquidGlass(
+      padding: const EdgeInsets.all(18),
+      strong: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LiquidIconBadge(
+            icon: isKarimen ? Icons.traffic_rounded : Icons.route_rounded,
+            color: color,
+            size: 48,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  config.title,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  config.subtitle,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: LiquidColors.muted(context),
+                  ),
+                ),
+                if (section != null) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _StageMiniChip(
+                        icon: section!.icon,
+                        label: section!.title,
+                        color: color,
+                      ),
+                      _StageMiniChip(
+                        icon: Icons.fact_check_outlined,
+                        label: section!.subtitle,
+                        color: LiquidColors.amber,
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StageMiniChip extends StatelessWidget {
+  const _StageMiniChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(
+          alpha: LiquidColors.isDark(context) ? 0.22 : 0.12,
+        ),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -155,17 +279,21 @@ class _StageDetailContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
         Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 920),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(config.subtitle),
+                _StageHeader(config: config, section: section),
                 const SizedBox(height: 18),
-                _ModeSection(title: section.title, children: _options(context)),
+                _ModeSection(
+                  title: section.title,
+                  subtitle: section.subtitle,
+                  children: _options(context),
+                ),
               ],
             ),
           ),
@@ -329,6 +457,24 @@ enum _StageSection {
   final String title;
   final String subtitle;
 
+  IconData get icon {
+    return switch (this) {
+      _StageSection.oneToOne => Icons.bolt_outlined,
+      _StageSection.exam => Icons.timer_outlined,
+      _StageSection.curriculum => Icons.view_list_outlined,
+      _StageSection.difficult => Icons.psychology_alt_outlined,
+    };
+  }
+
+  Color get color {
+    return switch (this) {
+      _StageSection.oneToOne => LiquidColors.primary,
+      _StageSection.exam => LiquidColors.vermilion,
+      _StageSection.curriculum => LiquidColors.sky,
+      _StageSection.difficult => LiquidColors.amber,
+    };
+  }
+
   static _StageSection? byId(String id) {
     for (final section in values) {
       if (section.id == id) {
@@ -352,65 +498,87 @@ class _StageSectionOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return LiquidGlass(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    section.title,
-                    style: Theme.of(context).textTheme.titleMedium,
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          LiquidIconBadge(icon: section.icon, color: section.color),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  section.title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
                   ),
-                  const SizedBox(height: 4),
-                  Text(section.subtitle),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  section.subtitle,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: LiquidColors.muted(context),
+                  ),
+                ),
+                if (isLocked) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'アカウント連携後に利用できます',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: LiquidColors.vermilion,
+                    ),
+                  ),
                 ],
-              ),
+              ],
             ),
-            Icon(
-              isLocked
-                  ? Icons.lock_outline_rounded
-                  : Icons.chevron_right_rounded,
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 10),
+          Icon(
+            isLocked ? Icons.lock_outline_rounded : Icons.chevron_right_rounded,
+          ),
+        ],
       ),
     );
   }
 }
 
 class _ModeSection extends StatelessWidget {
-  const _ModeSection({required this.title, required this.children});
+  const _ModeSection({
+    required this.title,
+    required this.subtitle,
+    required this.children,
+  });
 
   final String title;
+  final String subtitle;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 10),
-          Card(
-            child: Column(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LiquidSectionLabel(title: title, subtitle: subtitle),
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= 780;
+            final width = isWide
+                ? (constraints.maxWidth - 12) / 2
+                : constraints.maxWidth;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
               children: [
-                for (var i = 0; i < children.length; i += 1) ...[
-                  children[i],
-                  if (i != children.length - 1)
-                    const Divider(height: 1, color: Color(0xFFE3E1DC)),
-                ],
+                for (final child in children)
+                  SizedBox(width: width, child: child),
               ],
-            ),
-          ),
-        ],
-      ),
+            );
+          },
+        ),
+      ],
     );
   }
 }
@@ -432,39 +600,64 @@ class _PracticeOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final lockedMeta = meta.replaceAll(' / 進捗保存はアカウント連携後', '');
+    final metaText = isLocked
+        ? '$lockedMeta / アカウント連携後に利用できます'
+        : draft == null
+        ? meta
+        : '$meta / 続きから 問${draft!.currentIndex + 1}';
+    return LiquidGlass(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 4),
-                  Text(
-                    isLocked
-                        ? '$meta / アカウント連携後に利用できます'
-                        : draft == null
-                        ? meta
-                        : '$meta / 続きから 問${draft!.currentIndex + 1}',
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          LiquidIconBadge(
+            icon: isLocked
+                ? Icons.lock_outline_rounded
+                : draft == null
+                ? Icons.play_circle_outline_rounded
+                : Icons.history_rounded,
+            color: isLocked
+                ? LiquidColors.vermilion
+                : draft == null
+                ? LiquidColors.primary
+                : LiquidColors.amber,
+            size: 38,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  metaText,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: LiquidColors.muted(context),
+                  ),
+                ),
+              ],
             ),
-            if (draft != null) ...[
-              const SizedBox(width: 8),
-              const _ContinueBadge(),
-            ],
-            Icon(
-              isLocked
-                  ? Icons.lock_outline_rounded
-                  : Icons.chevron_right_rounded,
-            ),
+          ),
+          if (draft != null) ...[
+            const SizedBox(width: 8),
+            const _ContinueBadge(),
           ],
-        ),
+          const SizedBox(width: 6),
+          Icon(
+            isLocked ? Icons.lock_outline_rounded : Icons.chevron_right_rounded,
+          ),
+        ],
       ),
     );
   }
@@ -477,9 +670,11 @@ class _ContinueBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F3F3),
+        color: LiquidColors.amber.withValues(
+          alpha: LiquidColors.isDark(context) ? 0.22 : 0.14,
+        ),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF2F6F73)),
+        border: Border.all(color: LiquidColors.amber.withValues(alpha: 0.30)),
       ),
       child: const Padding(
         padding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
