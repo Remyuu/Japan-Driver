@@ -56,7 +56,10 @@ void main() {
       PracticeDraft(
         sessionId: sessionId,
         currentIndex: 2,
-        answers: {0: AnswerChoice.circle, 1: AnswerChoice.cross},
+        answers: {
+          0: {0: AnswerChoice.circle},
+          1: {0: AnswerChoice.cross},
+        },
         savedAt: DateTime.utc(2026, 6, 30),
         remainingSeconds: 1725,
       ),
@@ -67,8 +70,8 @@ void main() {
 
     expect(draft, isNotNull);
     expect(draft?.currentIndex, 2);
-    expect(draft?.answers[0], AnswerChoice.circle);
-    expect(draft?.answers[1], AnswerChoice.cross);
+    expect(draft?.answers[0]?[0], AnswerChoice.circle);
+    expect(draft?.answers[1]?[0], AnswerChoice.cross);
     expect(draft?.remainingSeconds, 1725);
   });
 
@@ -91,6 +94,12 @@ void main() {
             questionId: 'q2',
             selectedAnswer: AnswerChoice.circle,
             correctAnswer: AnswerChoice.cross,
+            additionalSelectedAnswers: [
+              AnswerChoice.cross,
+              AnswerChoice.circle,
+            ],
+            additionalCorrectAnswers: [AnswerChoice.cross, AnswerChoice.circle],
+            points: 2,
           ),
         ],
       ),
@@ -103,6 +112,9 @@ void main() {
     expect(record.totalCount, 2);
     expect(record.correctCount, 1);
     expect(record.wrongCount, 1);
+    expect(record.scorePoints, 1);
+    expect(record.totalPoints, 3);
+    expect(record.answers.last.selectedAnswers, hasLength(3));
     expect(record.answers.last.correctAnswer, AnswerChoice.cross);
   });
 

@@ -315,7 +315,7 @@ class _QuestionPracticeRunnerState
   static const _examDurationSeconds = 30 * 60;
 
   int _index = 0;
-  final Map<int, AnswerChoice> _selectedAnswers = {};
+  final Map<int, Map<int, AnswerChoice>> _selectedAnswers = {};
   bool _examSubmitted = false;
   bool _examResultsSaved = false;
   bool _practiceRecordSaved = false;
@@ -354,9 +354,14 @@ class _QuestionPracticeRunnerState
     return widget.questions[_index];
   }
 
-  Future<void> _choose(DriverQuestion question, AnswerChoice choice) async {
+  Future<void> _choose(
+    DriverQuestion question,
+    int answerIndex,
+    AnswerChoice choice,
+  ) async {
     final answeredIndex = _index;
-    final alreadyAnswered = _selectedAnswers.containsKey(_index);
+    final alreadyAnswered =
+        _selectedAnswers[_index]?.containsKey(answerIndex) ?? false;
     if (widget.feedbackMode == PracticeFeedbackMode.instant &&
         alreadyAnswered) {
       return;
@@ -364,14 +369,19 @@ class _QuestionPracticeRunnerState
     if (_examSubmitted) {
       return;
     }
-    setState(() => _selectedAnswers[_index] = choice);
-    if (widget.feedbackMode == PracticeFeedbackMode.instant) {
+    setState(() {
+      _selectedAnswers.putIfAbsent(_index, () => {})[answerIndex] = choice;
+    });
+    final response = _selectedAnswers[_index] ?? const {};
+    if (widget.feedbackMode == PracticeFeedbackMode.instant &&
+        question.isResponseComplete(response)) {
       await ref
           .read(progressControllerProvider.notifier)
           .recordAnswer(
             questionId: question.canonicalId,
-            selectedAnswer: choice,
+            selectedAnswer: response[0]!,
             correctAnswer: question.answer,
+            isCorrectOverride: question.isResponseCorrect(response),
           );
     }
     await _maybeAutoAdvance(answeredIndex);
@@ -389,7 +399,9 @@ class _QuestionPracticeRunnerState
     if (!mounted || _examSubmitted || _index != answeredIndex) {
       return;
     }
-    if (!_selectedAnswers.containsKey(answeredIndex)) {
+    if (!widget.questions[answeredIndex].isResponseComplete(
+      _selectedAnswers[answeredIndex] ?? const {},
+    )) {
       return;
     }
     setState(() => _index = answeredIndex + 1);
@@ -399,18 +411,29 @@ class _QuestionPracticeRunnerState
     if (_examResultsSaved) {
       return;
     }
-    final controller = ref.read(progressControllerProvider.notifier);
+    final answers =
+        <
+          ({
+            String questionId,
+            AnswerChoice selectedAnswer,
+            AnswerChoice correctAnswer,
+            bool isCorrect,
+          })
+        >[];
     for (var i = 0; i < widget.questions.length; i += 1) {
-      final answer = _selectedAnswers[i];
-      if (answer == null) {
+      final response = _selectedAnswers[i];
+      if (response == null ||
+          !widget.questions[i].isResponseComplete(response)) {
         continue;
       }
-      await controller.recordAnswer(
+      answers.add((
         questionId: widget.questions[i].canonicalId,
-        selectedAnswer: answer,
+        selectedAnswer: response[0]!,
         correctAnswer: widget.questions[i].answer,
-      );
+        isCorrect: widget.questions[i].isResponseCorrect(response),
+      ));
     }
+    await ref.read(progressControllerProvider.notifier).recordAnswers(answers);
     _examResultsSaved = true;
     await _savePracticeRecord();
     await ref
@@ -510,7 +533,9 @@ class _QuestionPracticeRunnerState
       return;
     }
     for (var i = 0; i < widget.questions.length; i += 1) {
-      if (!_selectedAnswers.containsKey(i)) {
+      if (!widget.questions[i].isResponseComplete(
+        _selectedAnswers[i] ?? const {},
+      )) {
         return;
       }
     }
@@ -526,8 +551,20 @@ class _QuestionPracticeRunnerState
         for (var i = 0; i < widget.questions.length; i += 1)
           PracticeRecordAnswer(
             questionId: widget.questions[i].canonicalId,
-            selectedAnswer: _selectedAnswers[i]!,
+            selectedAnswer: _selectedAnswers[i]![0]!,
             correctAnswer: widget.questions[i].answer,
+            additionalSelectedAnswers: [
+              for (
+                var answerIndex = 1;
+                answerIndex < widget.questions[i].correctAnswers.length;
+                answerIndex += 1
+              )
+                _selectedAnswers[i]![answerIndex]!,
+            ],
+            additionalCorrectAnswers: widget.questions[i].correctAnswers
+                .skip(1)
+                .toList(),
+            points: widget.questions[i].pointValue,
           ),
       ],
     );
@@ -544,9 +581,11 @@ class _QuestionPracticeRunnerState
       return false;
     }
     if (_isExam && !_examSubmitted && _index == widget.questions.length - 1) {
-      return _selectedAnswers.length == widget.questions.length;
+      return _allQuestionsAnswered;
     }
-    return _selectedAnswers.containsKey(_index);
+    return widget.questions[_index].isResponseComplete(
+      _selectedAnswers[_index] ?? const {},
+    );
   }
 
   String get _nextLabel {
@@ -556,16 +595,33 @@ class _QuestionPracticeRunnerState
     return _index == widget.questions.length - 1 ? '完了' : '次へ';
   }
 
-  int get _correctCount {
-    var count = 0;
+  bool get _allQuestionsAnswered {
     for (var i = 0; i < widget.questions.length; i += 1) {
-      final answer = _selectedAnswers[i];
-      if (answer != null && widget.questions[i].isCorrect(answer)) {
-        count += 1;
+      if (!widget.questions[i].isResponseComplete(
+        _selectedAnswers[i] ?? const {},
+      )) {
+        return false;
       }
     }
-    return count;
+    return true;
   }
+
+  int get _scorePoints {
+    var score = 0;
+    for (var i = 0; i < widget.questions.length; i += 1) {
+      if (widget.questions[i].isResponseCorrect(
+        _selectedAnswers[i] ?? const {},
+      )) {
+        score += widget.questions[i].pointValue;
+      }
+    }
+    return score;
+  }
+
+  int get _totalPoints => widget.questions.fold(
+    0,
+    (total, question) => total + question.pointValue,
+  );
 
   String get _timerText {
     final seconds = _remainingSeconds ?? _examDurationSeconds;
@@ -582,7 +638,10 @@ class _QuestionPracticeRunnerState
             PracticeDraft(
               sessionId: widget.sessionId,
               currentIndex: _index,
-              answers: Map<int, AnswerChoice>.of(_selectedAnswers),
+              answers: {
+                for (final entry in _selectedAnswers.entries)
+                  entry.key: Map<int, AnswerChoice>.of(entry.value),
+              },
               savedAt: DateTime.now(),
               remainingSeconds: _isExam ? _remainingSeconds : null,
             ),
@@ -772,8 +831,8 @@ class _QuestionPracticeRunnerState
                                           PracticeFeedbackMode.exam,
                                   canGoNext: _canGoNext,
                                   nextLabel: _nextLabel,
-                                  onChoose: (choice) =>
-                                      _choose(question, choice),
+                                  onChoose: (answerIndex, choice) =>
+                                      _choose(question, answerIndex, choice),
                                   onPrevious: _previous,
                                   onNext: () => _next(),
                                 ),
@@ -789,7 +848,7 @@ class _QuestionPracticeRunnerState
                                   translations: translations,
                                   retryTranslations: retryTranslations,
                                   examSummary: _examSubmitted
-                                      ? '結果 $_correctCount / ${widget.questions.length}'
+                                      ? '結果 $_scorePoints / $_totalPoints'
                                       : null,
                                   index: _index,
                                   total: widget.questions.length,
@@ -831,15 +890,15 @@ class _QuestionPracticeRunnerState
                                     PracticeFeedbackMode.exam,
                             canGoNext: _canGoNext,
                             nextLabel: _nextLabel,
-                            onChoose: (choice) => _choose(question, choice),
+                            onChoose: (answerIndex, choice) =>
+                                _choose(question, answerIndex, choice),
                             onPrevious: _previous,
                             onNext: () => _next(),
                           ),
                           const SizedBox(height: 12),
                           if (_examSubmitted) ...[
                             _ExamSummaryCard(
-                              text:
-                                  '結果 $_correctCount / ${widget.questions.length}',
+                              text: '結果 $_scorePoints / $_totalPoints',
                             ),
                             const SizedBox(height: 12),
                           ],
@@ -905,7 +964,7 @@ class _QuestionPanel extends StatelessWidget {
   final String title;
   final int index;
   final int total;
-  final AnswerChoice? selectedAnswer;
+  final Map<int, AnswerChoice>? selectedAnswer;
   final bool revealAnswer;
   final bool showRuby;
   final Map<TranslationLanguage, _TranslationState> translations;
@@ -913,7 +972,7 @@ class _QuestionPanel extends StatelessWidget {
   final bool canChangeAnswer;
   final bool canGoNext;
   final String nextLabel;
-  final ValueChanged<AnswerChoice> onChoose;
+  final void Function(int answerIndex, AnswerChoice choice) onChoose;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
 
@@ -960,45 +1019,28 @@ class _QuestionPanel extends StatelessWidget {
               _ImageList(paths: question.questionImageAssetPaths),
             ],
             const SizedBox(height: 24),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final twoColumns = constraints.maxWidth >= 560;
-                final buttons = [
-                  _AnswerButton(
-                    choice: AnswerChoice.circle,
-                    selectedAnswer: selectedAnswer,
-                    correctAnswer: question.answer,
-                    revealAnswer: revealAnswer,
-                    canChangeAnswer: canChangeAnswer,
-                    onTap: () => onChoose(AnswerChoice.circle),
-                  ),
-                  _AnswerButton(
-                    choice: AnswerChoice.cross,
-                    selectedAnswer: selectedAnswer,
-                    correctAnswer: question.answer,
-                    revealAnswer: revealAnswer,
-                    canChangeAnswer: canChangeAnswer,
-                    onTap: () => onChoose(AnswerChoice.cross),
-                  ),
-                ];
-                return twoColumns
-                    ? Row(
-                        children: [
-                          Expanded(child: buttons[0]),
-                          const SizedBox(width: 12),
-                          Expanded(child: buttons[1]),
-                        ],
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          buttons[0],
-                          const SizedBox(height: 12),
-                          buttons[1],
-                        ],
-                      );
-              },
-            ),
+            if (question.subquestions.isEmpty)
+              _AnswerButtonPair(
+                selectedAnswer: selectedAnswer?[0],
+                correctAnswer: question.answer,
+                revealAnswer: revealAnswer,
+                canChangeAnswer: canChangeAnswer,
+                onChoose: (choice) => onChoose(0, choice),
+              )
+            else
+              for (var i = 0; i < question.subquestions.length; i += 1) ...[
+                _SubquestionCard(
+                  number: i + 1,
+                  subquestion: question.subquestions[i],
+                  selectedAnswer: selectedAnswer?[i],
+                  revealAnswer: revealAnswer,
+                  showRuby: showRuby,
+                  canChangeAnswer: canChangeAnswer,
+                  onChoose: (choice) => onChoose(i, choice),
+                ),
+                if (i != question.subquestions.length - 1)
+                  const SizedBox(height: 12),
+              ],
             const SizedBox(height: 18),
             Row(
               children: [
@@ -1022,6 +1064,113 @@ class _QuestionPanel extends StatelessWidget {
   }
 }
 
+class _SubquestionCard extends StatelessWidget {
+  const _SubquestionCard({
+    required this.number,
+    required this.subquestion,
+    required this.selectedAnswer,
+    required this.revealAnswer,
+    required this.showRuby,
+    required this.canChangeAnswer,
+    required this.onChoose,
+  });
+
+  final int number;
+  final DriverSubquestion subquestion;
+  final AnswerChoice? selectedAnswer;
+  final bool revealAnswer;
+  final bool showRuby;
+  final bool canChangeAnswer;
+  final ValueChanged<AnswerChoice> onChoose;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLowest,
+        border: Border.all(color: const Color(0xFFE3E1DC)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            RubyText(
+              text: '($number) ${subquestion.text}',
+              rubyHtml: subquestion.rubyHtml == null
+                  ? null
+                  : '($number) ${subquestion.rubyHtml}',
+              showRuby: showRuby,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 14),
+            _AnswerButtonPair(
+              selectedAnswer: selectedAnswer,
+              correctAnswer: subquestion.answer,
+              revealAnswer: revealAnswer,
+              canChangeAnswer: canChangeAnswer,
+              onChoose: onChoose,
+              compact: true,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AnswerButtonPair extends StatelessWidget {
+  const _AnswerButtonPair({
+    required this.selectedAnswer,
+    required this.correctAnswer,
+    required this.revealAnswer,
+    required this.canChangeAnswer,
+    required this.onChoose,
+    this.compact = false,
+  });
+
+  final AnswerChoice? selectedAnswer;
+  final AnswerChoice correctAnswer;
+  final bool revealAnswer;
+  final bool canChangeAnswer;
+  final ValueChanged<AnswerChoice> onChoose;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final twoColumns = constraints.maxWidth >= 420;
+        final buttons = [
+          for (final choice in AnswerChoice.values)
+            _AnswerButton(
+              choice: choice,
+              selectedAnswer: selectedAnswer,
+              correctAnswer: correctAnswer,
+              revealAnswer: revealAnswer,
+              canChangeAnswer: canChangeAnswer,
+              onTap: () => onChoose(choice),
+              height: compact ? 56 : 72,
+            ),
+        ];
+        return twoColumns
+            ? Row(
+                children: [
+                  Expanded(child: buttons[0]),
+                  const SizedBox(width: 12),
+                  Expanded(child: buttons[1]),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [buttons[0], const SizedBox(height: 12), buttons[1]],
+              );
+      },
+    );
+  }
+}
+
 class _AnswerButton extends StatelessWidget {
   const _AnswerButton({
     required this.choice,
@@ -1030,6 +1179,7 @@ class _AnswerButton extends StatelessWidget {
     required this.revealAnswer,
     required this.canChangeAnswer,
     required this.onTap,
+    this.height = 72,
   });
 
   final AnswerChoice choice;
@@ -1038,6 +1188,7 @@ class _AnswerButton extends StatelessWidget {
   final bool revealAnswer;
   final bool canChangeAnswer;
   final VoidCallback onTap;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -1074,7 +1225,7 @@ class _AnswerButton extends StatelessWidget {
       onTap: !answered || canChangeAnswer ? onTap : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        height: 72,
+        height: height,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: background,
@@ -1180,7 +1331,7 @@ class _SidePanel extends StatelessWidget {
   });
 
   final DriverQuestion question;
-  final AnswerChoice? selectedAnswer;
+  final Map<int, AnswerChoice>? selectedAnswer;
   final bool revealAnswer;
   final bool showRuby;
   final Map<TranslationLanguage, _TranslationState> translations;
@@ -1258,7 +1409,7 @@ class _QuestionDetailPanel extends StatelessWidget {
   });
 
   final DriverQuestion question;
-  final AnswerChoice? selectedAnswer;
+  final Map<int, AnswerChoice>? selectedAnswer;
   final bool revealAnswer;
   final bool showRuby;
   final Map<TranslationLanguage, _TranslationState> translations;
@@ -1318,7 +1469,7 @@ class _ResultPanel extends StatelessWidget {
   });
 
   final DriverQuestion question;
-  final AnswerChoice? selectedAnswer;
+  final Map<int, AnswerChoice>? selectedAnswer;
   final bool revealAnswer;
   final bool showRuby;
   final Map<TranslationLanguage, _TranslationState> translations;
@@ -1326,8 +1477,8 @@ class _ResultPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selected = selectedAnswer;
-    if (selected == null) {
+    final response = selectedAnswer;
+    if (response == null || response.isEmpty) {
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -1345,7 +1496,7 @@ class _ResultPanel extends StatelessWidget {
             children: [
               Text('回答済み', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
-              Text('あなたの答え：${selected.label}'),
+              Text('あなたの答え：${_answerLabels(response)}'),
               const SizedBox(height: 8),
               const Text('採点は提出後に表示されます'),
             ],
@@ -1354,7 +1505,7 @@ class _ResultPanel extends StatelessWidget {
       );
     }
 
-    final isCorrect = question.isCorrect(selected);
+    final isCorrect = question.isResponseCorrect(response);
     final color = isCorrect ? const Color(0xFF1D7F48) : const Color(0xFFB73A36);
 
     return Card(
@@ -1382,7 +1533,10 @@ class _ResultPanel extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            Text('答え：${question.answer.label}'),
+            Text(
+              'あなたの答え：${_answerLabels(response)}\n'
+              '答え：${_correctAnswerLabels(question)}',
+            ),
             if (question.explanation.isNotEmpty) ...[
               const SizedBox(height: 14),
               RubyText(
@@ -1429,6 +1583,26 @@ class _ResultPanel extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _answerLabels(Map<int, AnswerChoice> response) {
+    if (question.subquestions.isEmpty) {
+      return response[0]?.label ?? '未回答';
+    }
+    return [
+      for (var i = 0; i < question.subquestions.length; i += 1)
+        '(${i + 1}) ${response[i]?.label ?? '未回答'}',
+    ].join('  ');
+  }
+
+  String _correctAnswerLabels(DriverQuestion question) {
+    if (question.subquestions.isEmpty) {
+      return question.answer.label;
+    }
+    return [
+      for (var i = 0; i < question.correctAnswers.length; i += 1)
+        '(${i + 1}) ${question.correctAnswers[i].label}',
+    ].join('  ');
   }
 }
 
@@ -1818,18 +1992,20 @@ class _AnswerSheetCard extends StatelessWidget {
   });
 
   final List<DriverQuestion> questions;
-  final Map<int, AnswerChoice> answers;
+  final Map<int, Map<int, AnswerChoice>> answers;
   final int currentIndex;
   final bool revealAnswer;
   final ValueChanged<int> onJumpToQuestion;
 
   @override
   Widget build(BuildContext context) {
-    final answered = answers.length;
+    final answered = answers.entries.where((entry) {
+      return questions[entry.key].isResponseComplete(entry.value);
+    }).length;
     final correct = revealAnswer
         ? answers.entries.where((entry) {
             final question = questions[entry.key];
-            return question.isCorrect(entry.value);
+            return question.isResponseCorrect(entry.value);
           }).length
         : null;
 
@@ -1889,15 +2065,15 @@ class _AnswerSheetCell extends StatelessWidget {
 
   final int number;
   final bool isCurrent;
-  final AnswerChoice? answer;
+  final Map<int, AnswerChoice>? answer;
   final DriverQuestion question;
   final bool revealAnswer;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final answered = answer != null;
-    final isCorrect = answered && question.isCorrect(answer!);
+    final answered = answer != null && question.isResponseComplete(answer!);
+    final isCorrect = answered && question.isResponseCorrect(answer!);
     final colorScheme = Theme.of(context).colorScheme;
     final surface = colorScheme.surface;
     final background = !answered
@@ -1925,7 +2101,9 @@ class _AnswerSheetCell extends StatelessWidget {
         : const Color(0xFFB73A36);
 
     return Tooltip(
-      message: answered ? '問$number ${answer!.label}' : '問$number 未回答',
+      message: answered
+          ? '問$number ${[for (var i = 0; i < answer!.length; i += 1) answer![i]?.label ?? '-'].join(' / ')}'
+          : '問$number 未回答',
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: onTap,

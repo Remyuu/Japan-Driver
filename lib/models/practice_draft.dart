@@ -11,7 +11,7 @@ class PracticeDraft {
 
   final String sessionId;
   final int currentIndex;
-  final Map<int, AnswerChoice> answers;
+  final Map<int, Map<int, AnswerChoice>> answers;
   final DateTime savedAt;
   final int? remainingSeconds;
 
@@ -20,7 +20,11 @@ class PracticeDraft {
       'sessionId': sessionId,
       'currentIndex': currentIndex,
       'answers': {
-        for (final entry in answers.entries) '${entry.key}': entry.value.label,
+        for (final entry in answers.entries)
+          '${entry.key}': {
+            for (final answer in entry.value.entries)
+              '${answer.key}': answer.value.label,
+          },
       },
       'savedAt': savedAt.toIso8601String(),
       if (remainingSeconds != null) 'remainingSeconds': remainingSeconds,
@@ -35,10 +39,19 @@ class PracticeDraft {
       answers: {
         if (rawAnswers is Map)
           for (final entry in rawAnswers.entries)
-            if (int.tryParse('${entry.key}') != null && entry.value is String)
-              int.parse('${entry.key}'): AnswerChoice.fromRaw(
-                entry.value as String,
-              ),
+            if (int.tryParse('${entry.key}') != null)
+              int.parse('${entry.key}'): switch (entry.value) {
+                final String value => {0: AnswerChoice.fromRaw(value)},
+                final Map value => {
+                  for (final answer in value.entries)
+                    if (int.tryParse('${answer.key}') != null &&
+                        answer.value is String)
+                      int.parse('${answer.key}'): AnswerChoice.fromRaw(
+                        answer.value as String,
+                      ),
+                },
+                _ => <int, AnswerChoice>{},
+              },
       },
       savedAt:
           DateTime.tryParse(json['savedAt'] as String? ?? '') ??

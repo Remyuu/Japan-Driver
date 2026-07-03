@@ -162,6 +162,7 @@ class ProgressController extends AsyncNotifier<ProgressStore> {
     required String questionId,
     required AnswerChoice selectedAnswer,
     required AnswerChoice correctAnswer,
+    bool? isCorrectOverride,
   }) async {
     if ((ref.read(accountUserProvider).value?.id ?? _userId) == null) {
       return;
@@ -171,7 +172,35 @@ class ProgressController extends AsyncNotifier<ProgressStore> {
       questionId: questionId,
       selectedAnswer: selectedAnswer,
       correctAnswer: correctAnswer,
+      isCorrectOverride: isCorrectOverride,
     );
+    await _save(next);
+  }
+
+  Future<void> recordAnswers(
+    List<
+      ({
+        String questionId,
+        AnswerChoice selectedAnswer,
+        AnswerChoice correctAnswer,
+        bool isCorrect,
+      })
+    >
+    answers,
+  ) async {
+    if ((ref.read(accountUserProvider).value?.id ?? _userId) == null ||
+        answers.isEmpty) {
+      return;
+    }
+    var next = state.value ?? ProgressStore.empty();
+    for (final answer in answers) {
+      next = next.recordAnswer(
+        questionId: answer.questionId,
+        selectedAnswer: answer.selectedAnswer,
+        correctAnswer: answer.correctAnswer,
+        isCorrectOverride: answer.isCorrect,
+      );
+    }
     await _save(next);
   }
 

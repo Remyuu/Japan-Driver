@@ -5,31 +5,79 @@ class PracticeRecordAnswer {
     required this.questionId,
     required this.selectedAnswer,
     required this.correctAnswer,
+    this.additionalSelectedAnswers = const [],
+    this.additionalCorrectAnswers = const [],
+    this.points = 1,
   });
 
   final String questionId;
   final AnswerChoice selectedAnswer;
   final AnswerChoice correctAnswer;
+  final List<AnswerChoice> additionalSelectedAnswers;
+  final List<AnswerChoice> additionalCorrectAnswers;
+  final int points;
 
-  bool get isCorrect => selectedAnswer == correctAnswer;
+  List<AnswerChoice> get selectedAnswers => [
+    selectedAnswer,
+    ...additionalSelectedAnswers,
+  ];
+
+  List<AnswerChoice> get correctAnswers => [
+    correctAnswer,
+    ...additionalCorrectAnswers,
+  ];
+
+  bool get isCorrect {
+    if (selectedAnswers.length != correctAnswers.length) {
+      return false;
+    }
+    for (var i = 0; i < selectedAnswers.length; i += 1) {
+      if (selectedAnswers[i] != correctAnswers[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   Map<String, Object?> toJson() {
     return {
       'questionId': questionId,
       'selectedAnswer': selectedAnswer.label,
       'correctAnswer': correctAnswer.label,
+      if (additionalSelectedAnswers.isNotEmpty)
+        'selectedAnswers': [for (final answer in selectedAnswers) answer.label],
+      if (additionalCorrectAnswers.isNotEmpty)
+        'correctAnswers': [for (final answer in correctAnswers) answer.label],
+      if (points != 1) 'points': points,
     };
   }
 
   factory PracticeRecordAnswer.fromJson(Map<String, Object?> json) {
+    final rawSelectedAnswers = json['selectedAnswers'];
+    final rawCorrectAnswers = json['correctAnswers'];
+    final selectedAnswers = rawSelectedAnswers is List
+        ? rawSelectedAnswers
+              .whereType<String>()
+              .map(AnswerChoice.fromRaw)
+              .toList()
+        : <AnswerChoice>[];
+    final correctAnswers = rawCorrectAnswers is List
+        ? rawCorrectAnswers
+              .whereType<String>()
+              .map(AnswerChoice.fromRaw)
+              .toList()
+        : <AnswerChoice>[];
     return PracticeRecordAnswer(
       questionId: json['questionId'] as String? ?? '',
-      selectedAnswer: AnswerChoice.fromRaw(
-        json['selectedAnswer'] as String? ?? '×',
-      ),
-      correctAnswer: AnswerChoice.fromRaw(
-        json['correctAnswer'] as String? ?? '×',
-      ),
+      selectedAnswer:
+          selectedAnswers.firstOrNull ??
+          AnswerChoice.fromRaw(json['selectedAnswer'] as String? ?? '×'),
+      correctAnswer:
+          correctAnswers.firstOrNull ??
+          AnswerChoice.fromRaw(json['correctAnswer'] as String? ?? '×'),
+      additionalSelectedAnswers: selectedAnswers.skip(1).toList(),
+      additionalCorrectAnswers: correctAnswers.skip(1).toList(),
+      points: json['points'] as int? ?? 1,
     );
   }
 }
@@ -58,6 +106,13 @@ class PracticeRecord {
   int get correctCount => answers.where((answer) => answer.isCorrect).length;
 
   int get wrongCount => totalCount - correctCount;
+
+  int get totalPoints => answers.fold(0, (sum, answer) => sum + answer.points);
+
+  int get scorePoints => answers.fold(
+    0,
+    (sum, answer) => sum + (answer.isCorrect ? answer.points : 0),
+  );
 
   Map<String, Object?> toJson() {
     return {

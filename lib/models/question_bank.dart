@@ -107,6 +107,7 @@ class DriverQuestion {
     required this.rangeStep,
     required this.schoolAccuracyRate,
     required this.nationwideAccuracyRate,
+    required this.subquestions,
   });
 
   final String bankId;
@@ -132,8 +133,35 @@ class DriverQuestion {
   final int? rangeStep;
   final int? schoolAccuracyRate;
   final int? nationwideAccuracyRate;
+  final List<DriverSubquestion> subquestions;
+
+  List<AnswerChoice> get correctAnswers => subquestions.isEmpty
+      ? [answer]
+      : [for (final subquestion in subquestions) subquestion.answer];
+
+  int get pointValue => subquestions.isEmpty ? 1 : 2;
 
   bool isCorrect(AnswerChoice choice) => choice == answer;
+
+  bool isResponseComplete(Map<int, AnswerChoice> response) {
+    return response.length == correctAnswers.length &&
+        List.generate(
+          correctAnswers.length,
+          response.containsKey,
+        ).every((answered) => answered);
+  }
+
+  bool isResponseCorrect(Map<int, AnswerChoice> response) {
+    if (!isResponseComplete(response)) {
+      return false;
+    }
+    for (var i = 0; i < correctAnswers.length; i += 1) {
+      if (response[i] != correctAnswers[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   factory DriverQuestion.fromJson(
     BankDefinition definition,
@@ -182,6 +210,31 @@ class DriverQuestion {
       rangeStep: _int(json, 'range_step'),
       schoolAccuracyRate: _int(json, 'school_accuracy_rate'),
       nationwideAccuracyRate: _int(json, 'nationwide_accuracy_rate'),
+      subquestions: [
+        for (final item in (json['subquestions'] as List? ?? const []))
+          if (item is Map)
+            DriverSubquestion.fromJson(item.cast<String, Object?>()),
+      ],
+    );
+  }
+}
+
+class DriverSubquestion {
+  const DriverSubquestion({
+    required this.text,
+    required this.rubyHtml,
+    required this.answer,
+  });
+
+  final String text;
+  final String? rubyHtml;
+  final AnswerChoice answer;
+
+  factory DriverSubquestion.fromJson(Map<String, Object?> json) {
+    return DriverSubquestion(
+      text: _requiredString(json, 'text'),
+      rubyHtml: _nonEmptyString(json, 'ruby_html'),
+      answer: AnswerChoice.fromRaw(_requiredString(json, 'answer')),
     );
   }
 }

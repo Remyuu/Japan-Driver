@@ -78,13 +78,56 @@ class RecordsScreen extends ConsumerWidget {
   }
 }
 
-class RecordDetailScreen extends ConsumerWidget {
+class RecordDetailScreen extends ConsumerStatefulWidget {
   const RecordDetailScreen({super.key, required this.recordId});
 
   final String recordId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RecordDetailScreen> createState() => _RecordDetailScreenState();
+}
+
+class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
+  static const _pageSize = 5;
+  final ScrollController _scrollController = ScrollController();
+  int _visibleWrongCount = _pageSize;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_loadMoreWrongAnswers);
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_loadMoreWrongAnswers)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _loadMoreWrongAnswers() {
+    if (!_scrollController.hasClients ||
+        _scrollController.position.extentAfter > 480) {
+      return;
+    }
+    final progress = ref.read(progressControllerProvider).value;
+    final record = progress?.records
+        .where((record) => record.id == widget.recordId)
+        .firstOrNull;
+    if (record == null || _visibleWrongCount >= record.wrongCount) {
+      return;
+    }
+    setState(() {
+      _visibleWrongCount = (_visibleWrongCount + _pageSize).clamp(
+        0,
+        record.wrongCount,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final userAsync = ref.watch(accountUserProvider);
     final user = userAsync.value;
     final progress = ref
@@ -95,7 +138,7 @@ class RecordDetailScreen extends ConsumerWidget {
           loading: ProgressStore.empty,
         );
     final record = progress.records
-        .where((record) => record.id == recordId)
+        .where((record) => record.id == widget.recordId)
         .firstOrNull;
     final banksAsync = ref.watch(questionBanksProvider);
     final settings =
@@ -129,6 +172,7 @@ class RecordDetailScreen extends ConsumerWidget {
           : record == null
           ? const Center(child: Text('記録が見つかりません'))
           : ListView(
+              controller: _scrollController,
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               children: [
                 Center(
@@ -145,6 +189,7 @@ class RecordDetailScreen extends ConsumerWidget {
                           data: (banks) => _RecordQuestionList(
                             record: record,
                             banks: banks,
+                            visibleCount: _visibleWrongCount,
                             showRuby: settings.showRuby,
                             translationLanguages:
                                 settings.enabledTranslationLanguages,
@@ -206,8 +251,9 @@ class _RecordCard extends StatelessWidget {
                           label: record.mode == 'exam' ? '試験形式' : '練習',
                         ),
                         _SmallPill(
-                          label:
-                              '${record.correctCount} / ${record.totalCount}',
+                          label: record.mode == 'exam'
+                              ? '${record.scorePoints} / ${record.totalPoints}'
+                              : '${record.correctCount} / ${record.totalCount}',
                         ),
                         _SmallPill(label: '間違い ${record.wrongCount}'),
                       ],
@@ -249,7 +295,11 @@ class _RecordSummary extends StatelessWidget {
               runSpacing: 8,
               children: [
                 _SmallPill(label: record.mode == 'exam' ? '試験形式' : '練習'),
-                _SmallPill(label: '正解 ${record.correctCount}'),
+                _SmallPill(
+                  label: record.mode == 'exam'
+                      ? '得点 ${record.scorePoints} / ${record.totalPoints}'
+                      : '正解 ${record.correctCount}',
+                ),
                 _SmallPill(label: '不正解 ${record.wrongCount}'),
                 _SmallPill(label: '全${record.totalCount}問'),
               ],
@@ -282,7 +332,11 @@ class _SavedAnswerSheet extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
-                Text('${record.correctCount} / ${record.totalCount}'),
+                Text(
+                  record.mode == 'exam'
+                      ? '${record.scorePoints} / ${record.totalPoints}'
+                      : '${record.correctCount} / ${record.totalCount}',
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -317,7 +371,7 @@ class _SavedAnswerCell extends StatelessWidget {
 
     return Tooltip(
       message:
-          '問$number あなた：${answer.selectedAnswer.label} / 答え：${answer.correctAnswer.label}',
+          '問$number あなた：${answer.selectedAnswers.map((value) => value.label).join(' / ')} / 答え：${answer.correctAnswers.map((value) => value.label).join(' / ')}',
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: background,
@@ -347,33 +401,52 @@ class _RecordQuestionList extends StatelessWidget {
   const _RecordQuestionList({
     required this.record,
     required this.banks,
+    required this.visibleCount,
     required this.showRuby,
     required this.translationLanguages,
   });
 
   final PracticeRecord record;
   final List<QuestionBank> banks;
+  final int visibleCount;
   final bool showRuby;
   final List<TranslationLanguage> translationLanguages;
 
   @override
   Widget build(BuildContext context) {
     final questionsById = _questionsByCanonicalId(record, banks);
+    final wrongAnswers = [
+      for (var i = 0; i < record.answers.length; i += 1)
+        if (!record.answers[i].isCorrect) (index: i, answer: record.answers[i]),
+    ];
+    final visibleAnswers = wrongAnswers.take(visibleCount).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('問題', style: Theme.of(context).textTheme.titleLarge),
+        Text('間違えた問題', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 10),
-        for (var i = 0; i < record.answers.length; i += 1) ...[
+        if (wrongAnswers.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Text('間違えた問題はありません'),
+            ),
+          ),
+        for (final entry in visibleAnswers) ...[
           _RecordQuestionCard(
-            number: i + 1,
-            answer: record.answers[i],
-            question: questionsById[record.answers[i].questionId],
+            number: entry.index + 1,
+            answer: entry.answer,
+            question: questionsById[entry.answer.questionId],
             showRuby: showRuby,
             translationLanguages: translationLanguages,
           ),
           const SizedBox(height: 12),
         ],
+        if (visibleAnswers.length < wrongAnswers.length)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(child: CircularProgressIndicator()),
+          ),
       ],
     );
   }
@@ -482,14 +555,40 @@ class _RecordQuestionCard extends ConsumerWidget {
                 const SizedBox(height: 12),
                 _RecordImageList(paths: question.questionImageAssetPaths),
               ],
+              if (question.subquestions.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                for (var i = 0; i < question.subquestions.length; i += 1) ...[
+                  RubyText(
+                    text: '(${i + 1}) ${question.subquestions[i].text}',
+                    rubyHtml: question.subquestions[i].rubyHtml == null
+                        ? null
+                        : '(${i + 1}) ${question.subquestions[i].rubyHtml}',
+                    showRuby: showRuby,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'あなた：${i < answer.selectedAnswers.length ? answer.selectedAnswers[i].label : '-'} / '
+                    '正解：${i < answer.correctAnswers.length ? answer.correctAnswers[i].label : question.subquestions[i].answer.label}',
+                  ),
+                  if (i != question.subquestions.length - 1)
+                    const Divider(height: 24),
+                ],
+              ],
             ],
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                _SmallPill(label: 'あなたの答え ${answer.selectedAnswer.label}'),
-                _SmallPill(label: '正解 ${answer.correctAnswer.label}'),
+                _SmallPill(
+                  label:
+                      'あなたの答え ${answer.selectedAnswers.map((value) => value.label).join(' / ')}',
+                ),
+                _SmallPill(
+                  label:
+                      '正解 ${answer.correctAnswers.map((value) => value.label).join(' / ')}',
+                ),
               ],
             ),
             if (question != null && question.explanation.isNotEmpty) ...[

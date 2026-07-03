@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:japan_driver/models/question_bank.dart';
 import 'package:japan_driver/repositories/question_repository.dart';
 
 void main() {
@@ -25,6 +26,34 @@ void main() {
     expect(
       banks.map((bank) => bank.questions.first.explanationChinese),
       everyElement(isNotEmpty),
+    );
+
+    final sotsukenExam = banks.singleWhere(
+      (bank) => bank.id == 'sotsuken_test',
+    );
+    final illustrationQuestions = sotsukenExam.questions
+        .where((question) => (question.sequence ?? 0) >= 91)
+        .toList();
+    expect(illustrationQuestions, hasLength(30));
+    expect(
+      illustrationQuestions,
+      everyElement(
+        isA<DriverQuestion>().having(
+          (question) => question.subquestions.length,
+          'subquestions',
+          3,
+        ),
+      ),
+    );
+    expect(
+      illustrationQuestions,
+      everyElement(
+        isA<DriverQuestion>().having(
+          (question) => question.pointValue,
+          'pointValue',
+          2,
+        ),
+      ),
     );
     expect(
       fallbackIdQuestions.every(

@@ -140,10 +140,11 @@ class ProgressStore {
     required String questionId,
     required AnswerChoice selectedAnswer,
     required AnswerChoice correctAnswer,
+    bool? isCorrectOverride,
     DateTime? answeredAt,
   }) {
     final previous = byQuestion[questionId];
-    final wasCorrect = selectedAnswer == correctAnswer;
+    final wasCorrect = isCorrectOverride ?? selectedAnswer == correctAnswer;
     final next = QuestionProgress(
       questionId: questionId,
       attempts: (previous?.attempts ?? 0) + 1,
