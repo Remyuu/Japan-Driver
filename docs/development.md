@@ -60,6 +60,16 @@ cp .firebase-config.example.json .firebase-config.json
 - Git push 不会单独上传题库。
 - 在另一台电脑开发时，需要另外准备 `scraped/` 目录。
 
+### 多小问题型
+
+危险预测场景题在 JSON 中仍作为一个大题保存，并通过 `subquestions` 保存 3 个独立的判断小问。当前题库包含：
+
+- 卒検前一问一答：30 个场景题。
+- 卒検前测试形式：30 个场景题。
+- 第二阶段「危険予測ディスカッション」：97 个场景题。
+
+每个 `subquestions` 元素必须包含 `text`、`ruby_html` 和 `answer`。修改或重新抓取题库后，应运行 `flutter test`；题库测试会检查全部 157 条场景题均包含 3 个小问，避免抓取结果再次退化成单一 ○/×。
+
 ## 用户数据后端
 
 登录后，客户端通过 `Authorization: Bearer <Firebase ID Token>` 调用
