@@ -82,8 +82,17 @@ final questionTranslationProvider = FutureProvider.autoDispose
         explanation: lookup.language == TranslationLanguage.chinese
             ? question.explanationChinese
             : null,
+        subquestions: [
+          for (final subquestion in question.subquestions)
+            lookup.language == TranslationLanguage.chinese
+                ? subquestion.textChinese
+                : null,
+        ],
       );
-      if (local.isComplete(hasExplanation: question.explanation.isNotEmpty)) {
+      if (local.isComplete(
+        hasExplanation: question.explanation.isNotEmpty,
+        subquestionCount: question.subquestions.length,
+      )) {
         return Future.value(local);
       }
 

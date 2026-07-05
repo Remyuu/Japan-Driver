@@ -25,7 +25,7 @@ class TranslationRepository {
   static const _googleTranslateApiKey = String.fromEnvironment(
     'GOOGLE_TRANSLATE_API_KEY',
   );
-  static const _localCachePrefix = 'question_translation_v2';
+  static const _localCachePrefix = 'question_translation_v3';
 
   final _TranslationRepositoryOptions _options;
   final Map<String, Future<QuestionTranslation?>> _pendingRequests = {};
@@ -38,6 +38,7 @@ class TranslationRepository {
     final requestKey = [
       question.canonicalId,
       question.questionText,
+      for (final subquestion in question.subquestions) subquestion.text,
       question.explanation,
       language.apiCode,
       generateIfMissing,
@@ -89,9 +90,11 @@ class TranslationRepository {
     DriverQuestion question, {
     required TranslationLanguage language,
   }) async {
-    final contents = question.explanation.isEmpty
-        ? [question.questionText]
-        : [question.questionText, question.explanation];
+    final contents = [
+      question.questionText,
+      for (final subquestion in question.subquestions) subquestion.text,
+      if (question.explanation.isNotEmpty) question.explanation,
+    ];
     final call = _options.googleTranslateV2Call ?? _googleTranslateV2HttpCall;
     final response = await call({
       'q': contents,
@@ -101,6 +104,7 @@ class TranslationRepository {
     });
     return _translationFromGoogleV2Response(
       response,
+      subquestionCount: question.subquestions.length,
       includeExplanation: question.explanation.isNotEmpty,
     );
   }
@@ -127,11 +131,12 @@ class TranslationRepository {
 
   QuestionTranslation _translationFromGoogleV2Response(
     Object? response, {
+    required int subquestionCount,
     required bool includeExplanation,
   }) {
     final data = response is Map ? response['data'] : null;
     final translations = data is Map ? data['translations'] : null;
-    final expectedLength = includeExplanation ? 2 : 1;
+    final expectedLength = 1 + subquestionCount + (includeExplanation ? 1 : 0);
     if (translations is! List || translations.length != expectedLength) {
       throw const TranslationException();
     }
@@ -145,13 +150,15 @@ class TranslationRepository {
     ];
     if (values.length != expectedLength ||
         values.first == null ||
-        (includeExplanation && values[1] == null)) {
+        values.skip(1).take(subquestionCount).any((value) => value == null) ||
+        (includeExplanation && values.last == null)) {
       throw const TranslationException();
     }
 
     return QuestionTranslation(
       question: values[0],
-      explanation: includeExplanation ? values[1] : null,
+      subquestions: values.skip(1).take(subquestionCount).toList(),
+      explanation: includeExplanation ? values.last : null,
     );
   }
 
@@ -183,9 +190,21 @@ class TranslationRepository {
       if (translatedQuestion == null) {
         return null;
       }
+      final translatedSubquestions = switch (json['subquestions']) {
+        final List values => [
+          for (final value in values) _nonEmptyString(value),
+        ],
+        _ => const <String?>[],
+      };
+      if (question.subquestions.isNotEmpty &&
+          (translatedSubquestions.length != question.subquestions.length ||
+              translatedSubquestions.any((text) => text == null))) {
+        return null;
+      }
       return QuestionTranslation(
         question: translatedQuestion,
         explanation: _nonEmptyString(json['explanation']),
+        subquestions: translatedSubquestions,
       );
     } catch (_) {
       return null;
@@ -205,6 +224,7 @@ class TranslationRepository {
       _localCacheKey(question, language),
       jsonEncode({
         'question': translation.question,
+        'subquestions': translation.subquestions,
         'explanation': translation.explanation,
       }),
     );
@@ -220,6 +240,8 @@ class TranslationRepository {
       question.canonicalId,
       language.cacheKey,
       _stableHash(question.questionText),
+      for (final subquestion in question.subquestions)
+        _stableHash(subquestion.text),
       _stableHash(question.explanation),
     ].join(':');
   }

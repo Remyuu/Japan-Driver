@@ -601,6 +601,16 @@ class _RecordQuestionCard extends ConsumerWidget {
                   showRuby: showRuby,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
+                for (final entry in translations.entries) ...[
+                  const SizedBox(height: 8),
+                  _RecordTranslation(
+                    language: entry.key,
+                    text: entry.value.value.subquestionAt(i),
+                    isLoading: entry.value.isLoading,
+                    error: entry.value.error,
+                    onRetry: retryTranslations[entry.key],
+                  ),
+                ],
                 const SizedBox(height: 6),
                 Text(
                   'あなた：${i < answer.selectedAnswers.length ? _answerChoiceLabel(answer.selectedAnswers[i]) : '未回答'} / '
@@ -672,6 +682,10 @@ class _RecordTranslationState {
       value: QuestionTranslation(
         question: hasBundledTranslation ? question.questionChinese : null,
         explanation: hasBundledTranslation ? question.explanationChinese : null,
+        subquestions: [
+          for (final subquestion in question.subquestions)
+            hasBundledTranslation ? subquestion.textChinese : null,
+        ],
       ),
       isLoading: false,
     );

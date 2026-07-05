@@ -60,6 +60,10 @@ class _TranslationState {
         explanation: hasBundledTranslation
             ? question?.explanationChinese
             : null,
+        subquestions: [
+          for (final subquestion in question?.subquestions ?? const [])
+            hasBundledTranslation ? subquestion.textChinese : null,
+        ],
       ),
       isLoading: false,
       error: null,
@@ -1079,6 +1083,8 @@ class _QuestionPanel extends StatelessWidget {
                 selectedAnswer: selectedAnswer?[i],
                 revealAnswer: revealAnswer,
                 showRuby: showRuby,
+                translations: translations,
+                retryTranslations: retryTranslations,
                 canChangeAnswer: canChangeAnswer,
                 onChoose: (choice) => onChoose(i, choice),
               ),
@@ -1114,6 +1120,8 @@ class _SubquestionCard extends StatelessWidget {
     required this.selectedAnswer,
     required this.revealAnswer,
     required this.showRuby,
+    required this.translations,
+    required this.retryTranslations,
     required this.canChangeAnswer,
     required this.onChoose,
   });
@@ -1123,6 +1131,8 @@ class _SubquestionCard extends StatelessWidget {
   final AnswerChoice? selectedAnswer;
   final bool revealAnswer;
   final bool showRuby;
+  final Map<TranslationLanguage, _TranslationState> translations;
+  final Map<TranslationLanguage, VoidCallback> retryTranslations;
   final bool canChangeAnswer;
   final ValueChanged<AnswerChoice> onChoose;
 
@@ -1147,6 +1157,16 @@ class _SubquestionCard extends StatelessWidget {
               showRuby: showRuby,
               style: Theme.of(context).textTheme.bodyLarge,
             ),
+            for (final entry in translations.entries) ...[
+              const SizedBox(height: 8),
+              _TranslationCard(
+                language: entry.key,
+                text: entry.value.value.subquestionAt(number - 1),
+                isLoading: entry.value.isLoading,
+                error: entry.value.error,
+                onRetry: retryTranslations[entry.key],
+              ),
+            ],
             const SizedBox(height: 14),
             _AnswerButtonPair(
               selectedAnswer: selectedAnswer,

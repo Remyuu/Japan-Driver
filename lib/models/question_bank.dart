@@ -280,6 +280,11 @@ class DriverQuestion {
       final Map value => value.cast<String, Object?>(),
       _ => const <String, Object?>{},
     };
+    final subquestionTranslations = switch (translation['subquestions']) {
+      final List value => value,
+      _ => const [],
+    };
+    final subquestionsJson = json['subquestions'] as List? ?? const [];
 
     return DriverQuestion(
       bankId: definition.id,
@@ -316,9 +321,14 @@ class DriverQuestion {
       schoolAccuracyRate: _int(json, 'school_accuracy_rate'),
       nationwideAccuracyRate: _int(json, 'nationwide_accuracy_rate'),
       subquestions: [
-        for (final item in (json['subquestions'] as List? ?? const []))
-          if (item is Map)
-            DriverSubquestion.fromJson(item.cast<String, Object?>()),
+        for (var i = 0; i < subquestionsJson.length; i += 1)
+          if (subquestionsJson[i] is Map)
+            DriverSubquestion.fromJson(
+              (subquestionsJson[i] as Map).cast<String, Object?>(),
+              translation: i < subquestionTranslations.length
+                  ? subquestionTranslations[i]
+                  : null,
+            ),
       ],
     );
   }
@@ -328,17 +338,30 @@ class DriverSubquestion {
   const DriverSubquestion({
     required this.text,
     required this.rubyHtml,
+    required this.textChinese,
     required this.answer,
   });
 
   final String text;
   final String? rubyHtml;
+  final String? textChinese;
   final AnswerChoice answer;
 
-  factory DriverSubquestion.fromJson(Map<String, Object?> json) {
+  factory DriverSubquestion.fromJson(
+    Map<String, Object?> json, {
+    Object? translation,
+  }) {
+    final translationMap = switch (translation) {
+      final Map value => value.cast<String, Object?>(),
+      _ => const <String, Object?>{},
+    };
     return DriverSubquestion(
       text: _requiredString(json, 'text'),
       rubyHtml: _nonEmptyString(json, 'ruby_html'),
+      textChinese:
+          _nonEmptyString(json, 'text_zh') ??
+          _nonEmptyString(translationMap, 'text') ??
+          _nonEmptyValueString(translation),
       answer: AnswerChoice.fromRaw(_requiredString(json, 'answer')),
     );
   }
@@ -359,6 +382,14 @@ String _requiredString(Map<String, Object?> json, String key) {
 String? _nonEmptyString(Map<String, Object?> json, String key) {
   final value = _string(json, key)?.trim();
   return value == null || value.isEmpty ? null : value;
+}
+
+String? _nonEmptyValueString(Object? value) {
+  if (value is! String) {
+    return null;
+  }
+  final text = value.trim();
+  return text.isEmpty ? null : text;
 }
 
 String? _string(Map<String, Object?>? json, String key) {

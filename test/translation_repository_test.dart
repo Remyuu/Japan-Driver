@@ -77,6 +77,52 @@ void main() {
     },
   );
 
+  test('sends subquestions to Google and parses them in order', () async {
+    final banks = await const QuestionRepository().loadBanks();
+    final question = banks
+        .expand((bank) => bank.questions)
+        .firstWhere((question) => question.subquestions.length >= 3);
+    final expectedPayload = [
+      question.questionText,
+      for (final subquestion in question.subquestions) subquestion.text,
+      if (question.explanation.isNotEmpty) question.explanation,
+    ];
+    Map<String, Object?>? receivedPayload;
+    final repository = TranslationRepository(
+      useLocalCache: false,
+      googleTranslateV2Call: (payload) async {
+        receivedPayload = payload;
+        return {
+          'data': {
+            'translations': [
+              for (var i = 0; i < expectedPayload.length; i += 1)
+                {'translatedText': 'translated $i'},
+            ],
+          },
+        };
+      },
+    );
+
+    final translation = await repository.getQuestionTranslation(
+      question,
+      language: TranslationLanguage.english,
+      generateIfMissing: true,
+    );
+
+    expect(receivedPayload?['q'], expectedPayload);
+    expect(translation?.question, 'translated 0');
+    expect(translation?.subquestions, [
+      for (var i = 0; i < question.subquestions.length; i += 1)
+        'translated ${i + 1}',
+    ]);
+    expect(
+      translation?.explanation,
+      question.explanation.isEmpty
+          ? isNull
+          : 'translated ${expectedPayload.length - 1}',
+    );
+  });
+
   test('caches successful Google v2 translations locally', () async {
     SharedPreferences.setMockInitialValues({});
     final question =
