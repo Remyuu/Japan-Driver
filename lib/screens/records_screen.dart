@@ -94,23 +94,23 @@ class RecordDetailScreen extends ConsumerStatefulWidget {
 class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
   static const _pageSize = 5;
   final ScrollController _scrollController = ScrollController();
-  int _visibleWrongCount = _pageSize;
+  int _visibleAnswerCount = _pageSize;
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_loadMoreWrongAnswers);
+    _scrollController.addListener(_loadMoreAnswers);
   }
 
   @override
   void dispose() {
     _scrollController
-      ..removeListener(_loadMoreWrongAnswers)
+      ..removeListener(_loadMoreAnswers)
       ..dispose();
     super.dispose();
   }
 
-  void _loadMoreWrongAnswers() {
+  void _loadMoreAnswers() {
     if (!_scrollController.hasClients ||
         _scrollController.position.extentAfter > 480) {
       return;
@@ -119,13 +119,13 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
     final record = progress?.records
         .where((record) => record.id == widget.recordId)
         .firstOrNull;
-    if (record == null || _visibleWrongCount >= record.wrongCount) {
+    if (record == null || _visibleAnswerCount >= record.totalCount) {
       return;
     }
     setState(() {
-      _visibleWrongCount = (_visibleWrongCount + _pageSize).clamp(
+      _visibleAnswerCount = (_visibleAnswerCount + _pageSize).clamp(
         0,
-        record.wrongCount,
+        record.totalCount,
       );
     });
   }
@@ -194,7 +194,7 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
                             data: (banks) => _RecordQuestionList(
                               record: record,
                               banks: banks,
-                              visibleCount: _visibleWrongCount,
+                              visibleCount: _visibleAnswerCount,
                               showRuby: settings.showRuby,
                               translationLanguages:
                                   settings.enabledTranslationLanguages,
@@ -442,20 +442,20 @@ class _RecordQuestionList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final questionsById = _questionsByCanonicalId(record, banks);
-    final wrongAnswers = [
+    final answers = [
       for (var i = 0; i < record.answers.length; i += 1)
-        if (!record.answers[i].isCorrect) (index: i, answer: record.answers[i]),
+        (index: i, answer: record.answers[i]),
     ];
-    final visibleAnswers = wrongAnswers.take(visibleCount).toList();
+    final visibleAnswers = answers.take(visibleCount).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('間違えた問題', style: Theme.of(context).textTheme.titleLarge),
+        Text('解答した問題', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 10),
-        if (wrongAnswers.isEmpty)
+        if (answers.isEmpty)
           const LiquidGlass(
             padding: EdgeInsets.all(20),
-            child: Text('間違えた問題はありません'),
+            child: Text('保存された解答はありません'),
           ),
         for (final entry in visibleAnswers) ...[
           _RecordQuestionCard(
@@ -467,7 +467,7 @@ class _RecordQuestionList extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
-        if (visibleAnswers.length < wrongAnswers.length)
+        if (visibleAnswers.length < answers.length)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
             child: Center(child: CircularProgressIndicator()),
@@ -517,17 +517,23 @@ class _RecordQuestionCard extends ConsumerWidget {
     final isCorrect = answer.isCorrect;
     final color = isCorrect ? LiquidColors.success : LiquidColors.danger;
     final question = this.question;
-    final translations =
-        <TranslationLanguage, AsyncValue<QuestionTranslation?>>{};
+    final translations = <TranslationLanguage, _RecordTranslationState>{};
+    final retryTranslations = <TranslationLanguage, VoidCallback>{};
     if (question != null) {
       for (final language in translationLanguages) {
-        translations[language] = ref.watch(
-          questionTranslationProvider((
-            question: question,
-            language: language,
-            generateIfMissing: true,
-          )),
+        final lookup = (
+          question: question,
+          language: language,
+          generateIfMissing: true,
         );
+        final translationAsync = ref.watch(questionTranslationProvider(lookup));
+        translations[language] = _RecordTranslationState.fromQuestion(
+          question,
+          language,
+        ).withAsync(translationAsync);
+        retryTranslations[language] = () {
+          ref.invalidate(questionTranslationProvider(lookup));
+        };
       }
     }
 
@@ -571,9 +577,10 @@ class _RecordQuestionCard extends ConsumerWidget {
               const SizedBox(height: 8),
               _RecordTranslation(
                 language: entry.key,
-                text: entry.value.value?.question,
+                text: entry.value.value.question,
                 isLoading: entry.value.isLoading,
                 error: entry.value.error,
+                onRetry: retryTranslations[entry.key],
               ),
             ],
             if (question.questionImageAssetPaths.isNotEmpty) ...[
@@ -629,14 +636,51 @@ class _RecordQuestionCard extends ConsumerWidget {
               const SizedBox(height: 8),
               _RecordTranslation(
                 language: entry.key,
-                text: entry.value.value?.explanation,
+                text: entry.value.value.explanation,
                 isLoading: entry.value.isLoading,
                 error: entry.value.error,
+                onRetry: retryTranslations[entry.key],
               ),
             ],
           ],
         ],
       ),
+    );
+  }
+}
+
+class _RecordTranslationState {
+  const _RecordTranslationState({
+    required this.value,
+    required this.isLoading,
+    this.error,
+  });
+
+  final QuestionTranslation value;
+  final bool isLoading;
+  final Object? error;
+
+  factory _RecordTranslationState.fromQuestion(
+    DriverQuestion question,
+    TranslationLanguage language,
+  ) {
+    final hasBundledTranslation = language == TranslationLanguage.chinese;
+    return _RecordTranslationState(
+      value: QuestionTranslation(
+        question: hasBundledTranslation ? question.questionChinese : null,
+        explanation: hasBundledTranslation ? question.explanationChinese : null,
+      ),
+      isLoading: false,
+    );
+  }
+
+  _RecordTranslationState withAsync(
+    AsyncValue<QuestionTranslation?> translationAsync,
+  ) {
+    return _RecordTranslationState(
+      value: value.merge(translationAsync.value),
+      isLoading: translationAsync.isLoading,
+      error: translationAsync.error,
     );
   }
 }
@@ -647,12 +691,14 @@ class _RecordTranslation extends StatelessWidget {
     required this.text,
     required this.isLoading,
     required this.error,
+    required this.onRetry,
   });
 
   final TranslationLanguage language;
   final String? text;
   final bool isLoading;
   final Object? error;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -693,8 +739,17 @@ class _RecordTranslation extends StatelessWidget {
                 Text(language.loadingMessage),
               ],
             )
-          else
+          else ...[
             Text(translationFailureMessage(language, error)),
+            if (onRetry != null) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text(language.retryLabel),
+              ),
+            ],
+          ],
         ],
       ),
     );
