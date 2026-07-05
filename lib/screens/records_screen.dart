@@ -97,6 +97,7 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
   static const _pageSize = 5;
   final ScrollController _scrollController = ScrollController();
   int _visibleAnswerCount = _pageSize;
+  bool _showWrongOnly = true;
 
   @override
   void initState() {
@@ -121,14 +122,29 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
     final record = progress?.records
         .where((record) => record.id == widget.recordId)
         .firstOrNull;
-    if (record == null || _visibleAnswerCount >= record.totalCount) {
+    final answerCount = _showWrongOnly
+        ? record?.wrongCount
+        : record?.totalCount;
+    if (record == null ||
+        answerCount == null ||
+        _visibleAnswerCount >= answerCount) {
       return;
     }
     setState(() {
       _visibleAnswerCount = (_visibleAnswerCount + _pageSize).clamp(
         0,
-        record.totalCount,
+        answerCount,
       );
+    });
+  }
+
+  void _setShowWrongOnly(bool value) {
+    if (_showWrongOnly == value) {
+      return;
+    }
+    setState(() {
+      _showWrongOnly = value;
+      _visibleAnswerCount = _pageSize;
     });
   }
 
@@ -198,6 +214,8 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
                               record: record,
                               banks: banks,
                               visibleCount: _visibleAnswerCount,
+                              showWrongOnly: _showWrongOnly,
+                              onShowWrongOnlyChanged: _setShowWrongOnly,
                               showRuby: settings.showRuby,
                               translationLanguages:
                                   settings.enabledTranslationLanguages,
@@ -432,6 +450,8 @@ class _RecordQuestionList extends StatelessWidget {
     required this.record,
     required this.banks,
     required this.visibleCount,
+    required this.showWrongOnly,
+    required this.onShowWrongOnlyChanged,
     required this.showRuby,
     required this.translationLanguages,
   });
@@ -439,6 +459,8 @@ class _RecordQuestionList extends StatelessWidget {
   final PracticeRecord record;
   final List<QuestionBank> banks;
   final int visibleCount;
+  final bool showWrongOnly;
+  final ValueChanged<bool> onShowWrongOnlyChanged;
   final bool showRuby;
   final List<TranslationLanguage> translationLanguages;
 
@@ -447,18 +469,38 @@ class _RecordQuestionList extends StatelessWidget {
     final questionsById = _questionsByCanonicalId(record, banks);
     final answers = [
       for (var i = 0; i < record.answers.length; i += 1)
-        (index: i, answer: record.answers[i]),
+        if (!showWrongOnly || !record.answers[i].isCorrect)
+          (index: i, answer: record.answers[i]),
     ];
     final visibleAnswers = answers.take(visibleCount).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('解答した問題', style: Theme.of(context).textTheme.titleLarge),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                showWrongOnly ? '間違えた問題' : '解答した問題',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: true, label: Text('只看错题')),
+                ButtonSegment(value: false, label: Text('全部')),
+              ],
+              selected: {showWrongOnly},
+              onSelectionChanged: (values) {
+                onShowWrongOnlyChanged(values.single);
+              },
+            ),
+          ],
+        ),
         const SizedBox(height: 10),
         if (answers.isEmpty)
-          const LiquidGlass(
-            padding: EdgeInsets.all(20),
-            child: Text('保存された解答はありません'),
+          LiquidGlass(
+            padding: const EdgeInsets.all(20),
+            child: Text(showWrongOnly ? '間違えた問題はありません' : '保存された解答はありません'),
           ),
         for (final entry in visibleAnswers) ...[
           _RecordQuestionCard(
