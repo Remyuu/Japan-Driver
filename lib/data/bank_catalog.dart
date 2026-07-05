@@ -71,3 +71,12 @@ const driverBankDefinitions = <BankDefinition>[
     assetBasePath: 'scraped/musasi_ja_difficult',
   ),
 ];
+
+BankDefinition? driverBankDefinitionById(String id) {
+  for (final definition in driverBankDefinitions) {
+    if (definition.id == id) {
+      return definition;
+    }
+  }
+  return null;
+}

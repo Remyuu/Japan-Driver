@@ -134,7 +134,7 @@ class PracticeScreen extends ConsumerWidget {
         ),
       );
     }
-    final banksAsync = ref.watch(questionBanksProvider);
+    final bankAsync = ref.watch(questionBankProvider(bankId));
     final progress = ref
         .watch(progressControllerProvider)
         .when(
@@ -143,12 +143,8 @@ class PracticeScreen extends ConsumerWidget {
           loading: ProgressStore.empty,
         );
 
-    return banksAsync.when(
-      data: (banks) {
-        final bank = banks.where((item) => item.id == bankId).firstOrNull;
-        if (bank == null) {
-          return const _MissingScreen(message: '問題集が見つかりません');
-        }
+    return bankAsync.when(
+      data: (bank) {
         var questions = bank.questions;
         if (chapterNumber != null) {
           questions = questions
@@ -313,7 +309,8 @@ class QuestionPracticeRunner extends ConsumerStatefulWidget {
 
 class _QuestionPracticeRunnerState
     extends ConsumerState<QuestionPracticeRunner> {
-  static const _examDurationSeconds = 30 * 60;
+  static const _defaultExamDurationSeconds = 30 * 60;
+  static const _sotsukenExamDurationSeconds = 60 * 60;
 
   int _index = 0;
   final Map<int, Map<int, AnswerChoice>> _selectedAnswers = {};
@@ -416,22 +413,19 @@ class _QuestionPracticeRunnerState
         <
           ({
             String questionId,
-            AnswerChoice selectedAnswer,
+            AnswerChoice? selectedAnswer,
             AnswerChoice correctAnswer,
             bool isCorrect,
           })
         >[];
     for (var i = 0; i < widget.questions.length; i += 1) {
-      final response = _selectedAnswers[i];
-      if (response == null ||
-          !widget.questions[i].isResponseComplete(response)) {
-        continue;
-      }
+      final question = widget.questions[i];
+      final response = _selectedAnswers[i] ?? const <int, AnswerChoice>{};
       answers.add((
-        questionId: widget.questions[i].canonicalId,
-        selectedAnswer: response[0]!,
-        correctAnswer: widget.questions[i].answer,
-        isCorrect: widget.questions[i].isResponseCorrect(response),
+        questionId: question.canonicalId,
+        selectedAnswer: response[0],
+        correctAnswer: question.answer,
+        isCorrect: question.isResponseCorrect(response),
       ));
     }
     await ref.read(progressControllerProvider.notifier).recordAnswers(answers);
@@ -528,16 +522,19 @@ class _QuestionPracticeRunnerState
   }
 
   Future<void> _savePracticeRecord() async {
-    if (_practiceRecordSaved ||
-        widget.questions.isEmpty ||
-        _selectedAnswers.length != widget.questions.length) {
+    if (_practiceRecordSaved || widget.questions.isEmpty) {
       return;
     }
-    for (var i = 0; i < widget.questions.length; i += 1) {
-      if (!widget.questions[i].isResponseComplete(
-        _selectedAnswers[i] ?? const {},
-      )) {
+    if (!_isExam) {
+      if (_selectedAnswers.length != widget.questions.length) {
         return;
+      }
+      for (var i = 0; i < widget.questions.length; i += 1) {
+        if (!widget.questions[i].isResponseComplete(
+          _selectedAnswers[i] ?? const {},
+        )) {
+          return;
+        }
       }
     }
     final completedAt = DateTime.now();
@@ -550,23 +547,27 @@ class _QuestionPracticeRunnerState
       completedAt: completedAt,
       answers: [
         for (var i = 0; i < widget.questions.length; i += 1)
-          PracticeRecordAnswer(
-            questionId: widget.questions[i].canonicalId,
-            selectedAnswer: _selectedAnswers[i]![0]!,
-            correctAnswer: widget.questions[i].answer,
-            additionalSelectedAnswers: [
-              for (
-                var answerIndex = 1;
-                answerIndex < widget.questions[i].correctAnswers.length;
-                answerIndex += 1
-              )
-                _selectedAnswers[i]![answerIndex]!,
-            ],
-            additionalCorrectAnswers: widget.questions[i].correctAnswers
-                .skip(1)
-                .toList(),
-            points: widget.questions[i].pointValue,
-          ),
+          if (_isExam ||
+              widget.questions[i].isResponseComplete(
+                _selectedAnswers[i] ?? const {},
+              ))
+            PracticeRecordAnswer(
+              questionId: widget.questions[i].canonicalId,
+              selectedAnswer: _selectedAnswers[i]?[0],
+              correctAnswer: widget.questions[i].answer,
+              additionalSelectedAnswers: [
+                for (
+                  var answerIndex = 1;
+                  answerIndex < widget.questions[i].correctAnswers.length;
+                  answerIndex += 1
+                )
+                  _selectedAnswers[i]?[answerIndex],
+              ],
+              additionalCorrectAnswers: widget.questions[i].correctAnswers
+                  .skip(1)
+                  .toList(),
+              points: widget.questions[i].pointValue,
+            ),
       ],
     );
     await ref.read(progressControllerProvider.notifier).saveRecord(record);
@@ -575,14 +576,19 @@ class _QuestionPracticeRunnerState
 
   bool get _isExam => widget.feedbackMode == PracticeFeedbackMode.exam;
 
+  int get _examDurationSeconds =>
+      widget.sessionId.startsWith('sotsuken_test|exam|')
+      ? _sotsukenExamDurationSeconds
+      : _defaultExamDurationSeconds;
+
   bool get _revealAnswer => !_isExam || _examSubmitted;
 
   bool get _canGoNext {
     if (widget.questions.isEmpty) {
       return false;
     }
-    if (_isExam && !_examSubmitted && _index == widget.questions.length - 1) {
-      return _allQuestionsAnswered;
+    if (_isExam && !_examSubmitted) {
+      return true;
     }
     return widget.questions[_index].isResponseComplete(
       _selectedAnswers[_index] ?? const {},
@@ -594,17 +600,6 @@ class _QuestionPracticeRunnerState
       return '提出';
     }
     return _index == widget.questions.length - 1 ? '完了' : '次へ';
-  }
-
-  bool get _allQuestionsAnswered {
-    for (var i = 0; i < widget.questions.length; i += 1) {
-      if (!widget.questions[i].isResponseComplete(
-        _selectedAnswers[i] ?? const {},
-      )) {
-        return false;
-      }
-    }
-    return true;
   }
 
   int get _scorePoints {
@@ -1243,7 +1238,9 @@ class _AnswerButton extends StatelessWidget {
     final selected = selectedAnswer == choice;
     final isCorrectChoice = correctAnswer == choice;
     final surface = LiquidColors.glassFill(context, strong: true);
-    final borderColor = !answered
+    final borderColor = revealAnswer && isCorrectChoice
+        ? LiquidColors.success
+        : !answered
         ? LiquidColors.primary.withValues(
             alpha: LiquidColors.isDark(context) ? 0.34 : 0.26,
           )
@@ -1256,7 +1253,9 @@ class _AnswerButton extends StatelessWidget {
         : selected
         ? LiquidColors.danger
         : LiquidColors.hairline(context);
-    final background = !answered
+    final background = revealAnswer && isCorrectChoice
+        ? LiquidColors.success.withValues(alpha: 0.12)
+        : !answered
         ? surface
         : !revealAnswer
         ? selected
@@ -1546,8 +1545,8 @@ class _ResultPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final response = selectedAnswer;
-    if (response == null || response.isEmpty) {
+    final response = selectedAnswer ?? const <int, AnswerChoice>{};
+    if (response.isEmpty && !revealAnswer) {
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -2147,7 +2146,9 @@ class _AnswerSheetCell extends StatelessWidget {
     final isCorrect = answered && question.isResponseCorrect(answer!);
     final colorScheme = Theme.of(context).colorScheme;
     final surface = colorScheme.surface;
-    final background = !answered
+    final background = revealAnswer && !answered
+        ? LiquidColors.danger.withValues(alpha: 0.12)
+        : !answered
         ? surface
         : !revealAnswer
         ? LiquidColors.primary.withValues(alpha: 0.12)
@@ -2156,6 +2157,8 @@ class _AnswerSheetCell extends StatelessWidget {
         : LiquidColors.danger.withValues(alpha: 0.12);
     final borderColor = isCurrent
         ? colorScheme.onSurface
+        : revealAnswer && !answered
+        ? LiquidColors.danger
         : !answered
         ? LiquidColors.hairline(context)
         : !revealAnswer
@@ -2163,7 +2166,9 @@ class _AnswerSheetCell extends StatelessWidget {
         : isCorrect
         ? LiquidColors.success
         : LiquidColors.danger;
-    final textColor = !answered
+    final textColor = revealAnswer && !answered
+        ? LiquidColors.danger
+        : !answered
         ? colorScheme.onSurface
         : !revealAnswer
         ? LiquidColors.primary

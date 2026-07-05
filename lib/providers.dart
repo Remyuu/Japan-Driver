@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'models/answer_choice.dart';
@@ -31,6 +33,24 @@ final questionRepositoryProvider = Provider<QuestionRepository>((ref) {
 final questionBanksProvider = FutureProvider<List<QuestionBank>>((ref) async {
   return ref.watch(questionRepositoryProvider).loadBanks();
 });
+
+final questionBankProvider = FutureProvider.family<QuestionBank, String>((
+  ref,
+  bankId,
+) async {
+  return ref.watch(questionRepositoryProvider).loadBank(bankId);
+});
+
+final questionBankSummariesProvider = FutureProvider<List<QuestionBankSummary>>(
+  (ref) async {
+    return ref.watch(questionRepositoryProvider).loadBankSummaries();
+  },
+);
+
+final questionBankSummaryProvider =
+    FutureProvider.family<QuestionBankSummary, String>((ref, bankId) async {
+      return ref.watch(questionRepositoryProvider).loadBankSummary(bankId);
+    });
 
 final progressRepositoryProvider = Provider<ProgressRepository>((ref) {
   return ProgressRepository(
@@ -130,10 +150,18 @@ class SettingsController extends AsyncNotifier<AppSettings> {
 }
 
 class ProgressController extends AsyncNotifier<ProgressStore> {
+  static const _answerSaveDebounce = Duration(milliseconds: 900);
+
   String? _userId;
+  Timer? _scheduledSaveTimer;
+  ProgressStore? _scheduledSaveStore;
+  Future<void> _saveQueue = Future<void>.value();
 
   @override
   Future<ProgressStore> build() async {
+    ref.onDispose(() {
+      _scheduledSaveTimer?.cancel();
+    });
     final user = ref.watch(accountUserProvider).value;
     _userId = user?.id;
     if (_userId == null) {
@@ -142,25 +170,59 @@ class ProgressController extends AsyncNotifier<ProgressStore> {
     return ref.watch(progressRepositoryProvider).load(_userId!);
   }
 
-  Future<void> _save(ProgressStore store) async {
+  Future<void> _save(
+    ProgressStore store, {
+    bool debounceRemoteSave = false,
+  }) async {
     final userId = ref.read(accountUserProvider).value?.id ?? _userId;
     if (userId == null) {
       state = AsyncData(ProgressStore.empty());
       return;
     }
+    if (debounceRemoteSave) {
+      state = AsyncData(store);
+      _scheduleRemoteSave(userId, store);
+      return;
+    }
     final previous = state;
+    _scheduledSaveTimer?.cancel();
+    _scheduledSaveTimer = null;
+    _scheduledSaveStore = null;
     state = AsyncData(store);
     try {
-      await ref.read(progressRepositoryProvider).save(userId, store);
+      await _persist(userId, store);
     } catch (_) {
       state = previous;
       rethrow;
     }
   }
 
+  void _scheduleRemoteSave(String userId, ProgressStore store) {
+    _scheduledSaveStore = store;
+    _scheduledSaveTimer?.cancel();
+    _scheduledSaveTimer = Timer(_answerSaveDebounce, () {
+      final pending = _scheduledSaveStore;
+      _scheduledSaveStore = null;
+      _scheduledSaveTimer = null;
+      if (pending == null) {
+        return;
+      }
+      unawaited(_persist(userId, pending).catchError((_) {}));
+    });
+  }
+
+  Future<void> _persist(String userId, ProgressStore store) {
+    final previousSaves = _saveQueue.catchError((_) {});
+    final save = previousSaves.then(
+      (_) => ref.read(progressRepositoryProvider).save(userId, store),
+    );
+    _saveQueue = save;
+    return save;
+  }
+
   Future<void> recordAnswer({
     required String questionId,
-    required AnswerChoice selectedAnswer,
+    required AnswerChoice? selectedAnswer,
     required AnswerChoice correctAnswer,
     bool? isCorrectOverride,
   }) async {
@@ -174,14 +236,14 @@ class ProgressController extends AsyncNotifier<ProgressStore> {
       correctAnswer: correctAnswer,
       isCorrectOverride: isCorrectOverride,
     );
-    await _save(next);
+    await _save(next, debounceRemoteSave: true);
   }
 
   Future<void> recordAnswers(
     List<
       ({
         String questionId,
-        AnswerChoice selectedAnswer,
+        AnswerChoice? selectedAnswer,
         AnswerChoice correctAnswer,
         bool isCorrect,
       })

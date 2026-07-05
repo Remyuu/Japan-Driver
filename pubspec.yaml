@@ -67,6 +67,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/question_bank_manifest.json
     - assets/translations_zh.json
     - scraped/musasi_ja_karimen/karimen_1to1_all.json
     - scraped/musasi_ja_karimen/images/

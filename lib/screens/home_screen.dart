@@ -248,6 +248,7 @@ class _StageEntryCard extends StatelessWidget {
     return LiquidGlass(
       onTap: onTap,
       padding: const EdgeInsets.all(16),
+      enableBlur: false,
       child: Row(
         children: [
           LiquidIconBadge(icon: icon, color: color),
@@ -328,6 +329,7 @@ class _QuickActionTile extends StatelessWidget {
     return LiquidGlass(
       onTap: onTap,
       padding: const EdgeInsets.all(14),
+      enableBlur: false,
       child: Row(
         children: [
           LiquidIconBadge(icon: icon, color: color, size: 38),

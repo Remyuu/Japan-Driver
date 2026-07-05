@@ -26,6 +26,7 @@ elif [[ "$has_firebase_args" == false ]]; then
   exit 1
 fi
 
+python3 "$ROOT_DIR/scripts/generate_question_bank_manifest.py"
 "$FLUTTER_BIN" build web "${build_args[@]}" "$@"
 
 ssh -i "$SSH_KEY" "$REMOTE" "mkdir -p '$REMOTE_DIR'"

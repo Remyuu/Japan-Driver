@@ -93,4 +93,36 @@ void main() {
       isTrue,
     );
   });
+
+  test('loads one full bank by id', () async {
+    final bank = await const QuestionRepository().loadBank('karimen_1to1');
+
+    expect(bank.id, 'karimen_1to1');
+    expect(bank.questions, hasLength(300));
+    expect(bank.questions.first.questionChinese, isNotEmpty);
+  });
+
+  test('loads lightweight bank summaries', () async {
+    final summaries = await const QuestionRepository().loadBankSummaries();
+    final summary = await const QuestionRepository().loadBankSummary(
+      'karimen_1to1',
+    );
+
+    expect(summaries, hasLength(7));
+    expect(
+      summaries.expand((bank) => bank.questionIds).toSet(),
+      hasLength(2318),
+    );
+    expect(summary.id, 'karimen_1to1');
+    expect(summary.questionIds, hasLength(299));
+    expect(summary.workbooks.map((workbook) => workbook.number), [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+    ]);
+    expect(summary.workbooks.first.questionIds, hasLength(50));
+  });
 }

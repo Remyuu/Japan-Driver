@@ -118,6 +118,48 @@ void main() {
     expect(record.answers.last.correctAnswer, AnswerChoice.cross);
   });
 
+  test('encodes unanswered exam answers as wrong', () {
+    final unansweredProgress = ProgressStore.empty().recordAnswer(
+      questionId: 'q-unanswered',
+      selectedAnswer: null,
+      correctAnswer: AnswerChoice.circle,
+      answeredAt: DateTime.utc(2026),
+    );
+
+    expect(unansweredProgress.byQuestion['q-unanswered']?.lastAnswer, isNull);
+    expect(
+      unansweredProgress.byQuestion['q-unanswered']?.lastWasCorrect,
+      isFalse,
+    );
+    expect(unansweredProgress.wrongQuestionIds, contains('q-unanswered'));
+
+    final store = unansweredProgress.addRecord(
+      PracticeRecord(
+        id: 'record-unanswered',
+        sessionId: 'sotsuken_test|exam|workbook:1',
+        title: '本免',
+        subtitle: 'テスト形式 / 第1回',
+        mode: 'exam',
+        completedAt: DateTime.utc(2026, 6, 30, 13),
+        answers: const [
+          PracticeRecordAnswer(
+            questionId: 'q-unanswered',
+            selectedAnswer: null,
+            correctAnswer: AnswerChoice.circle,
+          ),
+        ],
+      ),
+    );
+
+    final decoded = ProgressStore.decode(store.encode());
+    final answer = decoded.records.single.answers.single;
+
+    expect(answer.selectedAnswer, isNull);
+    expect(answer.selectedAnswers, [null]);
+    expect(answer.isCorrect, isFalse);
+    expect(decoded.records.single.wrongCount, 1);
+  });
+
   test('stores comments independently for each question', () {
     final store = ProgressStore.empty()
         .addComment(

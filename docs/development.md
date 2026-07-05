@@ -120,9 +120,10 @@ python3 -m http.server 8787 --directory build/web
 部署脚本会自动：
 
 1. 读取本地 `.firebase-config.json`。
-2. 以 `/jp-driver/` 为基础路径构建 Flutter Web release。
-3. 将 `build/web/` 同步到服务器。
-4. 检查配置并重新加载 Nginx。
+2. 根据题库 JSON 生成 `assets/question_bank_manifest.json`。
+3. 以 `/jp-driver/` 为基础路径构建 Flutter Web release。
+4. 将 `build/web/` 同步到服务器。
+5. 检查配置并重新加载 Nginx。
 
 可通过环境变量覆盖部署参数：
 
@@ -135,6 +136,12 @@ REMOTE_DIR=/path/on/server \
 ```
 
 当前默认值定义在 `scripts/deploy_remoooo.sh` 中。
+
+如果需要为 Flutter Web 静态资源设置长期缓存，可将
+`server/nginx-jp-driver-static.inc` include 到站点对应的 Nginx `server`
+块中。该模板让 `/jp-driver/assets/`、`.js`、`.json`、字体和图片走
+短期浏览器缓存，同时让 `/jp-driver/index.html`、`main.dart.js` 和
+`flutter_bootstrap.js` 保持 `no-cache`，避免发布后入口和主包被长期缓存。
 
 ## Git 与线上同步
 

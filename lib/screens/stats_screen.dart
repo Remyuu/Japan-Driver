@@ -16,7 +16,7 @@ class StatsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(accountUserProvider);
     final user = userAsync.value;
-    final banksAsync = ref.watch(questionBanksProvider);
+    final banksAsync = ref.watch(questionBankSummariesProvider);
     final progress = ref
         .watch(progressControllerProvider)
         .when(
@@ -65,14 +65,14 @@ class StatsScreen extends ConsumerWidget {
 class _StatsContent extends StatelessWidget {
   const _StatsContent({required this.banks, required this.progress});
 
-  final List<QuestionBank> banks;
+  final List<QuestionBankSummary> banks;
   final ProgressStore progress;
 
   @override
   Widget build(BuildContext context) {
     final allIds = {
       for (final bank in banks)
-        for (final question in bank.questions) question.canonicalId,
+        for (final questionId in bank.questionIds) questionId,
     };
     final accuracy = (progress.accuracy * 100).round();
 
@@ -289,6 +289,7 @@ class _StatsActionTile extends StatelessWidget {
     return LiquidGlass(
       onTap: onTap,
       padding: const EdgeInsets.all(16),
+      enableBlur: false,
       child: Row(
         children: [
           LiquidIconBadge(icon: icon, color: color),
@@ -320,12 +321,12 @@ class _StatsActionTile extends StatelessWidget {
 class _BankProgress extends StatelessWidget {
   const _BankProgress({required this.bank, required this.progress});
 
-  final QuestionBank bank;
+  final QuestionBankSummary bank;
   final ProgressStore progress;
 
   @override
   Widget build(BuildContext context) {
-    final ids = bank.questions.map((question) => question.canonicalId).toSet();
+    final ids = bank.questionIds.toSet();
     final answered = ids
         .where((id) => progress.byQuestion.containsKey(id))
         .length;
@@ -334,6 +335,7 @@ class _BankProgress extends StatelessWidget {
 
     return LiquidGlass(
       padding: const EdgeInsets.all(16),
+      enableBlur: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -95,6 +95,8 @@ class LiquidGlass extends StatelessWidget {
     this.strong = false,
     this.borderRadius = 8,
     this.tint,
+    this.enableBlur = true,
+    this.blurSigma = 10,
   });
 
   final Widget child;
@@ -103,6 +105,8 @@ class LiquidGlass extends StatelessWidget {
   final bool strong;
   final double borderRadius;
   final Color? tint;
+  final bool enableBlur;
+  final double blurSigma;
 
   @override
   Widget build(BuildContext context) {
@@ -120,26 +124,30 @@ class LiquidGlass extends StatelessWidget {
       );
     }
 
+    final decorated = DecoratedBox(
+      decoration: BoxDecoration(
+        color: fill,
+        borderRadius: radius,
+        border: Border.all(color: LiquidColors.glassBorder(context)),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor,
+            blurRadius: 22,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: current,
+    );
+
     return ClipRRect(
       borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: fill,
-            borderRadius: radius,
-            border: Border.all(color: LiquidColors.glassBorder(context)),
-            boxShadow: [
-              BoxShadow(
-                color: shadowColor,
-                blurRadius: 22,
-                offset: const Offset(0, 12),
-              ),
-            ],
-          ),
-          child: current,
-        ),
-      ),
+      child: enableBlur
+          ? BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+              child: decorated,
+            )
+          : decorated,
     );
   }
 }

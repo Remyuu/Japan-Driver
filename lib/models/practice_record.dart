@@ -11,13 +11,13 @@ class PracticeRecordAnswer {
   });
 
   final String questionId;
-  final AnswerChoice selectedAnswer;
+  final AnswerChoice? selectedAnswer;
   final AnswerChoice correctAnswer;
-  final List<AnswerChoice> additionalSelectedAnswers;
+  final List<AnswerChoice?> additionalSelectedAnswers;
   final List<AnswerChoice> additionalCorrectAnswers;
   final int points;
 
-  List<AnswerChoice> get selectedAnswers => [
+  List<AnswerChoice?> get selectedAnswers => [
     selectedAnswer,
     ...additionalSelectedAnswers,
   ];
@@ -42,10 +42,12 @@ class PracticeRecordAnswer {
   Map<String, Object?> toJson() {
     return {
       'questionId': questionId,
-      'selectedAnswer': selectedAnswer.label,
+      if (selectedAnswer != null) 'selectedAnswer': selectedAnswer?.label,
       'correctAnswer': correctAnswer.label,
-      if (additionalSelectedAnswers.isNotEmpty)
-        'selectedAnswers': [for (final answer in selectedAnswers) answer.label],
+      if (selectedAnswer == null || additionalSelectedAnswers.isNotEmpty)
+        'selectedAnswers': [
+          for (final answer in selectedAnswers) answer?.label,
+        ],
       if (additionalCorrectAnswers.isNotEmpty)
         'correctAnswers': [for (final answer in correctAnswers) answer.label],
       if (points != 1) 'points': points,
@@ -56,11 +58,11 @@ class PracticeRecordAnswer {
     final rawSelectedAnswers = json['selectedAnswers'];
     final rawCorrectAnswers = json['correctAnswers'];
     final selectedAnswers = rawSelectedAnswers is List
-        ? rawSelectedAnswers
-              .whereType<String>()
-              .map(AnswerChoice.fromRaw)
-              .toList()
-        : <AnswerChoice>[];
+        ? <AnswerChoice?>[
+            for (final value in rawSelectedAnswers)
+              value is String ? AnswerChoice.fromRaw(value) : null,
+          ]
+        : <AnswerChoice?>[];
     final correctAnswers = rawCorrectAnswers is List
         ? rawCorrectAnswers
               .whereType<String>()
@@ -71,7 +73,9 @@ class PracticeRecordAnswer {
       questionId: json['questionId'] as String? ?? '',
       selectedAnswer:
           selectedAnswers.firstOrNull ??
-          AnswerChoice.fromRaw(json['selectedAnswer'] as String? ?? '×'),
+          (json['selectedAnswer'] is String
+              ? AnswerChoice.fromRaw(json['selectedAnswer']! as String)
+              : null),
       correctAnswer:
           correctAnswers.firstOrNull ??
           AnswerChoice.fromRaw(json['correctAnswer'] as String? ?? '×'),

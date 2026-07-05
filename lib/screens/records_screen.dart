@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../design/liquid_glass.dart';
-import '../models/practice_record.dart';
+import '../models/answer_choice.dart';
 import '../models/app_settings.dart';
+import '../models/practice_record.dart';
 import '../models/progress_store.dart';
 import '../models/question_bank.dart';
 import '../models/question_translation.dart';
@@ -228,6 +229,7 @@ class _RecordCard extends StatelessWidget {
     return LiquidGlass(
       onTap: () => context.push('/records/${Uri.encodeComponent(record.id)}'),
       padding: const EdgeInsets.all(16),
+      enableBlur: false,
       child: Row(
         children: [
           const LiquidIconBadge(
@@ -344,6 +346,7 @@ class _SavedAnswerSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return LiquidGlass(
       padding: const EdgeInsets.all(16),
+      enableBlur: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -395,7 +398,7 @@ class _SavedAnswerCell extends StatelessWidget {
 
     return Tooltip(
       message:
-          '問$number あなた：${answer.selectedAnswers.map((value) => value.label).join(' / ')} / 答え：${answer.correctAnswers.map((value) => value.label).join(' / ')}',
+          '問$number あなた：${_answerChoiceLabels(answer.selectedAnswers)} / 答え：${_answerChoiceLabels(answer.correctAnswers)}',
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: background,
@@ -530,6 +533,7 @@ class _RecordQuestionCard extends ConsumerWidget {
 
     return LiquidGlass(
       padding: const EdgeInsets.all(16),
+      enableBlur: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -589,7 +593,7 @@ class _RecordQuestionCard extends ConsumerWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'あなた：${i < answer.selectedAnswers.length ? answer.selectedAnswers[i].label : '-'} / '
+                  'あなた：${i < answer.selectedAnswers.length ? _answerChoiceLabel(answer.selectedAnswers[i]) : '未回答'} / '
                   '正解：${i < answer.correctAnswers.length ? answer.correctAnswers[i].label : question.subquestions[i].answer.label}',
                 ),
                 if (i != question.subquestions.length - 1)
@@ -603,8 +607,7 @@ class _RecordQuestionCard extends ConsumerWidget {
             runSpacing: 8,
             children: [
               _SmallPill(
-                label:
-                    'あなたの答え ${answer.selectedAnswers.map((value) => value.label).join(' / ')}',
+                label: 'あなたの答え ${_answerChoiceLabels(answer.selectedAnswers)}',
               ),
               _SmallPill(
                 label:
@@ -801,4 +804,12 @@ String _formatDate(DateTime value) {
   final hour = local.hour.toString().padLeft(2, '0');
   final minute = local.minute.toString().padLeft(2, '0');
   return '${local.year}/$month/$day $hour:$minute';
+}
+
+String _answerChoiceLabels(Iterable<AnswerChoice?> answers) {
+  return answers.map(_answerChoiceLabel).join(' / ');
+}
+
+String _answerChoiceLabel(AnswerChoice? answer) {
+  return answer?.label ?? '未回答';
 }

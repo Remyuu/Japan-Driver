@@ -42,7 +42,9 @@ class StageScreen extends ConsumerWidget {
       );
     }
 
-    final banksAsync = ref.watch(questionBanksProvider);
+    final summaryAsync = ref.watch(
+      questionBankSummaryProvider(config.bankIdForSection(section)),
+    );
     final userAsync = ref.watch(accountUserProvider);
     final user = userAsync.value;
     final progress = ref
@@ -63,11 +65,11 @@ class StageScreen extends ConsumerWidget {
         ),
       ),
       body: LiquidBackground(
-        child: banksAsync.when(
-          data: (banks) => _StageDetailContent(
+        child: summaryAsync.when(
+          data: (summary) => _StageDetailContent(
             config: config,
             section: section,
-            banks: banks,
+            summary: summary,
             progress: progress,
             canTrackProgress: user != null && !userAsync.isLoading,
             onAccountRequired: () => showAccountDialog(context, ref),
@@ -263,7 +265,7 @@ class _StageDetailContent extends StatelessWidget {
   const _StageDetailContent({
     required this.config,
     required this.section,
-    required this.banks,
+    required this.summary,
     required this.progress,
     required this.canTrackProgress,
     required this.onAccountRequired,
@@ -271,7 +273,7 @@ class _StageDetailContent extends StatelessWidget {
 
   final _StageConfig config;
   final _StageSection section;
-  final List<QuestionBank> banks;
+  final QuestionBankSummary summary;
   final ProgressStore progress;
   final bool canTrackProgress;
   final VoidCallback onAccountRequired;
@@ -291,7 +293,7 @@ class _StageDetailContent extends StatelessWidget {
                 const SizedBox(height: 18),
                 _ModeSection(
                   title: section.title,
-                  subtitle: section.subtitle,
+                  subtitle: _sectionSubtitle,
                   children: _options(context),
                 ),
               ],
@@ -302,18 +304,23 @@ class _StageDetailContent extends StatelessWidget {
     );
   }
 
-  QuestionBank _bank(String id) => banks.firstWhere((bank) => bank.id == id);
+  String get _sectionSubtitle {
+    if (section == _StageSection.exam && config.id == 'sotsuken') {
+      return '60分でまとめて答える';
+    }
+    return section.subtitle;
+  }
 
   List<Widget> _options(BuildContext context) {
     return switch (section) {
       _StageSection.oneToOne => _workbookOptions(
         context,
-        bank: _bank(config.oneToOneBankId),
+        summary: summary,
         feedbackMode: 'instant',
       ),
       _StageSection.exam => _workbookOptions(
         context,
-        bank: _bank(config.examBankId),
+        summary: summary,
         feedbackMode: 'exam',
       ),
       _StageSection.curriculum => _chapterOptions(context),
@@ -323,70 +330,56 @@ class _StageDetailContent extends StatelessWidget {
 
   List<Widget> _workbookOptions(
     BuildContext context, {
-    required QuestionBank bank,
+    required QuestionBankSummary summary,
     required String feedbackMode,
   }) {
-    final numbers = {
-      for (final question in bank.questions)
-        if (question.workbookDisplayNo != null) question.workbookDisplayNo!,
-    }.toList()..sort();
-
     return [
-      for (final number in numbers)
+      for (final workbook in summary.workbooks)
         _PracticeOption(
-          label: '第$number回',
-          meta: _summary(
-            bank.questions.where(
-              (question) => question.workbookDisplayNo == number,
-            ),
-          ),
+          label: '第${workbook.number}回',
+          meta: _summary(workbook.questionIds),
           draft: canTrackProgress
               ? progress.drafts[practiceSessionId(
-                  bankId: bank.id,
+                  bankId: summary.id,
                   mode: feedbackMode,
-                  workbookNumber: number,
+                  workbookNumber: workbook.number,
                 )]
               : null,
           isLocked:
               !canTrackProgress &&
               !canGuestStartPractice(
-                bankId: bank.id,
+                bankId: summary.id,
                 isInstantFeedback: feedbackMode == 'instant',
-                workbookNumber: number,
+                workbookNumber: workbook.number,
                 chapterNumber: null,
                 rangeStep: null,
               ),
           onTap:
               !canTrackProgress &&
                   !canGuestStartPractice(
-                    bankId: bank.id,
+                    bankId: summary.id,
                     isInstantFeedback: feedbackMode == 'instant',
-                    workbookNumber: number,
+                    workbookNumber: workbook.number,
                     chapterNumber: null,
                     rangeStep: null,
                   )
               ? onAccountRequired
               : () => context.push(
-                  '/practice/${bank.id}?workbook=$number&mode=$feedbackMode&stage=${config.id}&section=${section.id}',
+                  '/practice/${summary.id}?workbook=${workbook.number}&mode=$feedbackMode&stage=${config.id}&section=${section.id}',
                 ),
         ),
     ];
   }
 
   List<Widget> _chapterOptions(BuildContext context) {
-    final curriculum = _bank(config.curriculumBankId);
     return [
-      for (final chapter in curriculum.chapters)
+      for (final chapter in summary.chapters)
         _PracticeOption(
           label: '${chapter.number}. ${chapter.name}',
-          meta: _summary(
-            curriculum.questions.where(
-              (question) => question.chapterNumbers.contains(chapter.number),
-            ),
-          ),
+          meta: _summary(chapter.questionIds),
           draft: canTrackProgress
               ? progress.drafts[practiceSessionId(
-                  bankId: curriculum.id,
+                  bankId: summary.id,
                   mode: 'instant',
                   chapterNumber: chapter.number,
                 )]
@@ -394,7 +387,7 @@ class _StageDetailContent extends StatelessWidget {
           isLocked: !canTrackProgress,
           onTap: canTrackProgress
               ? () => context.push(
-                  '/practice/${curriculum.id}?chapter=${chapter.number}&mode=instant&stage=${config.id}&section=${section.id}',
+                  '/practice/${summary.id}?chapter=${chapter.number}&mode=instant&stage=${config.id}&section=${section.id}',
                 )
               : onAccountRequired,
         ),
@@ -402,18 +395,16 @@ class _StageDetailContent extends StatelessWidget {
   }
 
   List<Widget> _difficultOptions(BuildContext context) {
-    final difficult = _bank('difficult');
+    final range = summary.rangeSteps
+        .where((range) => range.step == config.rangeStep)
+        .firstOrNull;
     return [
       _PracticeOption(
         label: config.difficultLabel,
-        meta: _summary(
-          difficult.questions.where(
-            (question) => question.rangeStep == config.rangeStep,
-          ),
-        ),
+        meta: _summary(range?.questionIds ?? const []),
         draft: canTrackProgress
             ? progress.drafts[practiceSessionId(
-                bankId: difficult.id,
+                bankId: summary.id,
                 mode: 'instant',
                 rangeStep: config.rangeStep,
               )]
@@ -421,15 +412,15 @@ class _StageDetailContent extends StatelessWidget {
         isLocked: !canTrackProgress,
         onTap: canTrackProgress
             ? () => context.push(
-                '/practice/${difficult.id}?rangeStep=${config.rangeStep}&mode=instant&stage=${config.id}&section=${section.id}',
+                '/practice/${summary.id}?rangeStep=${config.rangeStep}&mode=instant&stage=${config.id}&section=${section.id}',
               )
             : onAccountRequired,
       ),
     ];
   }
 
-  String _summary(Iterable<DriverQuestion> questions) {
-    final ids = questions.map((question) => question.canonicalId).toSet();
+  String _summary(Iterable<String> questionIds) {
+    final ids = questionIds.toSet();
     if (!canTrackProgress) {
       return '${ids.length}問 / 進捗保存はアカウント連携後';
     }
@@ -501,6 +492,7 @@ class _StageSectionOption extends StatelessWidget {
     return LiquidGlass(
       onTap: onTap,
       padding: const EdgeInsets.all(16),
+      enableBlur: false,
       child: Row(
         children: [
           LiquidIconBadge(icon: section.icon, color: section.color),
@@ -609,6 +601,7 @@ class _PracticeOption extends StatelessWidget {
     return LiquidGlass(
       onTap: onTap,
       padding: const EdgeInsets.all(16),
+      enableBlur: false,
       child: Row(
         children: [
           LiquidIconBadge(
@@ -704,6 +697,15 @@ class _StageConfig {
   final String curriculumBankId;
   final int rangeStep;
   final String difficultLabel;
+
+  String bankIdForSection(_StageSection section) {
+    return switch (section) {
+      _StageSection.oneToOne => oneToOneBankId,
+      _StageSection.exam => examBankId,
+      _StageSection.curriculum => curriculumBankId,
+      _StageSection.difficult => 'difficult',
+    };
+  }
 
   static _StageConfig? byId(String id) {
     return switch (id) {

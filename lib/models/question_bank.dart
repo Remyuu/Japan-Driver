@@ -11,6 +11,111 @@ class ChapterOption implements Comparable<ChapterOption> {
   int compareTo(ChapterOption other) => number.compareTo(other.number);
 }
 
+class QuestionIdGroupSummary {
+  const QuestionIdGroupSummary({required this.questionIds});
+
+  final List<String> questionIds;
+
+  int get questionCount => questionIds.length;
+}
+
+class WorkbookSummary extends QuestionIdGroupSummary {
+  const WorkbookSummary({required this.number, required super.questionIds});
+
+  final int number;
+}
+
+class ChapterSummary extends QuestionIdGroupSummary
+    implements Comparable<ChapterSummary> {
+  const ChapterSummary({
+    required this.number,
+    required this.name,
+    required super.questionIds,
+  });
+
+  final int number;
+  final String name;
+
+  @override
+  int compareTo(ChapterSummary other) => number.compareTo(other.number);
+}
+
+class RangeStepSummary extends QuestionIdGroupSummary {
+  const RangeStepSummary({required this.step, required super.questionIds});
+
+  final int step;
+}
+
+class QuestionBankSummary extends QuestionIdGroupSummary {
+  const QuestionBankSummary({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.hasChapters,
+    required super.questionIds,
+    required this.workbooks,
+    required this.chapters,
+    required this.rangeSteps,
+  });
+
+  final String id;
+  final String title;
+  final String subtitle;
+  final bool hasChapters;
+  final List<WorkbookSummary> workbooks;
+  final List<ChapterSummary> chapters;
+  final List<RangeStepSummary> rangeSteps;
+
+  factory QuestionBankSummary.fromJson(
+    BankDefinition definition,
+    Map<String, Object?> json,
+  ) {
+    return QuestionBankSummary(
+      id: definition.id,
+      title: definition.title,
+      subtitle: definition.subtitle,
+      hasChapters: definition.hasChapters,
+      questionIds: _strings(json, 'question_ids'),
+      workbooks: [
+        for (final item in (json['workbooks'] as List? ?? const []))
+          if (item is Map)
+            WorkbookSummary(
+              number: _int(item.cast<String, Object?>(), 'number') ?? 0,
+              questionIds: _strings(
+                item.cast<String, Object?>(),
+                'question_ids',
+              ),
+            ),
+      ],
+      chapters: [
+        for (final item in (json['chapters'] as List? ?? const []))
+          if (item is Map)
+            ChapterSummary(
+              number: _int(item.cast<String, Object?>(), 'number') ?? 0,
+              name:
+                  _string(item.cast<String, Object?>(), 'name') ??
+                  '第${_int(item.cast<String, Object?>(), 'number') ?? 0}章',
+              questionIds: _strings(
+                item.cast<String, Object?>(),
+                'question_ids',
+              ),
+            ),
+      ],
+      rangeSteps: [
+        for (final item in (json['range_steps'] as List? ?? const []))
+          if (item is Map)
+            RangeStepSummary(
+              step: _int(item.cast<String, Object?>(), 'step') ?? 0,
+              questionIds: _strings(
+                item.cast<String, Object?>(),
+                'question_ids',
+              ),
+            ),
+      ],
+    );
+  }
+}
+
 class QuestionBank {
   const QuestionBank({
     required this.id,

@@ -21,7 +21,7 @@ class QuestionProgress {
   final int correctCount;
   final int wrongCount;
   final bool lastWasCorrect;
-  final AnswerChoice lastAnswer;
+  final AnswerChoice? lastAnswer;
   final DateTime lastAnsweredAt;
 
   bool get isWrong => !lastWasCorrect;
@@ -33,7 +33,7 @@ class QuestionProgress {
       'correctCount': correctCount,
       'wrongCount': wrongCount,
       'lastWasCorrect': lastWasCorrect,
-      'lastAnswer': lastAnswer.label,
+      if (lastAnswer != null) 'lastAnswer': lastAnswer?.label,
       'lastAnsweredAt': lastAnsweredAt.toIso8601String(),
     };
   }
@@ -45,7 +45,9 @@ class QuestionProgress {
       correctCount: json['correctCount'] as int? ?? 0,
       wrongCount: json['wrongCount'] as int? ?? 0,
       lastWasCorrect: json['lastWasCorrect'] as bool? ?? false,
-      lastAnswer: AnswerChoice.fromRaw(json['lastAnswer'] as String? ?? '×'),
+      lastAnswer: json['lastAnswer'] is String
+          ? AnswerChoice.fromRaw(json['lastAnswer']! as String)
+          : null,
       lastAnsweredAt:
           DateTime.tryParse(json['lastAnsweredAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
@@ -138,7 +140,7 @@ class ProgressStore {
 
   ProgressStore recordAnswer({
     required String questionId,
-    required AnswerChoice selectedAnswer,
+    required AnswerChoice? selectedAnswer,
     required AnswerChoice correctAnswer,
     bool? isCorrectOverride,
     DateTime? answeredAt,
