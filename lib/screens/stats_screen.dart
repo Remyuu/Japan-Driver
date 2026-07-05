@@ -8,6 +8,7 @@ import '../models/question_bank.dart';
 import '../navigation_transitions.dart';
 import '../providers.dart';
 import '../widgets/account_gate.dart';
+import '../widgets/app_settings_button.dart';
 
 class StatsScreen extends ConsumerWidget {
   const StatsScreen({super.key});
@@ -33,6 +34,7 @@ class StatsScreen extends ConsumerWidget {
           onPressed: () => context.popOrGoBack('/'),
           icon: const Icon(Icons.chevron_left_rounded),
         ),
+        actions: const [AppSettingsButton(), SizedBox(width: 4)],
       ),
       body: LiquidBackground(
         child: userAsync.isLoading

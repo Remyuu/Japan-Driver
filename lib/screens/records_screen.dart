@@ -14,6 +14,7 @@ import '../navigation_transitions.dart';
 import '../providers.dart';
 import '../translation_messages.dart';
 import '../widgets/account_gate.dart';
+import '../widgets/app_settings_button.dart';
 import '../widgets/ruby_text.dart';
 
 class RecordsScreen extends ConsumerWidget {
@@ -39,6 +40,7 @@ class RecordsScreen extends ConsumerWidget {
           onPressed: () => context.popOrGoBack('/'),
           icon: const Icon(Icons.chevron_left_rounded),
         ),
+        actions: const [AppSettingsButton(), SizedBox(width: 4)],
       ),
       body: LiquidBackground(
         child: userAsync.isLoading
@@ -156,6 +158,7 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
           onPressed: () => context.popOrGoBack('/records'),
           icon: const Icon(Icons.chevron_left_rounded),
         ),
+        actions: const [AppSettingsButton(), SizedBox(width: 4)],
       ),
       body: LiquidBackground(
         child: userAsync.isLoading

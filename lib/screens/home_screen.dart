@@ -6,6 +6,7 @@ import '../design/liquid_glass.dart';
 import '../models/progress_store.dart';
 import '../providers.dart';
 import '../widgets/account_gate.dart';
+import '../widgets/app_settings_button.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -29,6 +30,7 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Japan Driver'),
         actions: [
+          const AppSettingsButton(),
           IconButton(
             tooltip: '統計',
             onPressed: () => context.push('/stats'),

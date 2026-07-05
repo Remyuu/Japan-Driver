@@ -10,6 +10,7 @@ import '../models/question_bank.dart';
 import '../navigation_transitions.dart';
 import '../providers.dart';
 import '../widgets/account_gate.dart';
+import '../widgets/app_settings_button.dart';
 
 class StageScreen extends ConsumerWidget {
   const StageScreen({super.key, required this.stageId, this.sectionId});
@@ -37,6 +38,7 @@ class StageScreen extends ConsumerWidget {
             onPressed: () => context.popOrGoBack('/'),
             icon: const Icon(Icons.chevron_left_rounded),
           ),
+          actions: const [AppSettingsButton(), SizedBox(width: 4)],
         ),
         body: LiquidBackground(child: _StageMenuContent(config: config)),
       );
@@ -63,6 +65,7 @@ class StageScreen extends ConsumerWidget {
           onPressed: () => context.popOrGoBack('/stage/${config.id}'),
           icon: const Icon(Icons.chevron_left_rounded),
         ),
+        actions: const [AppSettingsButton(), SizedBox(width: 4)],
       ),
       body: LiquidBackground(
         child: summaryAsync.when(
