@@ -28,9 +28,63 @@ void main() {
       everyElement(isNotEmpty),
     );
 
+    final karimenExam = banks.singleWhere((bank) => bank.id == 'karimen_test');
+    final karimenWorkbookNumbers =
+        karimenExam.questions
+            .map((question) => question.workbookDisplayNo)
+            .whereType<int>()
+            .toSet()
+            .toList()
+          ..sort();
+    expect(karimenWorkbookNumbers, [1, 2, 3, 4, 5]);
+    for (final workbookNumber in karimenWorkbookNumbers) {
+      final workbookQuestions = karimenExam.questions
+          .where((question) => question.workbookDisplayNo == workbookNumber)
+          .toList();
+      expect(workbookQuestions, hasLength(50));
+      expect(
+        workbookQuestions.fold(
+          0,
+          (total, question) => total + question.pointValue,
+        ),
+        100,
+      );
+      expect(
+        workbookQuestions,
+        everyElement(
+          isA<DriverQuestion>().having(
+            (question) => question.pointValue,
+            'pointValue',
+            2,
+          ),
+        ),
+      );
+    }
+
     final sotsukenExam = banks.singleWhere(
       (bank) => bank.id == 'sotsuken_test',
     );
+    final sotsukenWorkbookNumbers =
+        sotsukenExam.questions
+            .map((question) => question.workbookDisplayNo)
+            .whereType<int>()
+            .toSet()
+            .toList()
+          ..sort();
+    expect(sotsukenWorkbookNumbers, [1, 2, 3, 4, 5, 6]);
+    for (final workbookNumber in sotsukenWorkbookNumbers) {
+      final workbookQuestions = sotsukenExam.questions
+          .where((question) => question.workbookDisplayNo == workbookNumber)
+          .toList();
+      expect(workbookQuestions, hasLength(95));
+      expect(
+        workbookQuestions.fold(
+          0,
+          (total, question) => total + question.pointValue,
+        ),
+        100,
+      );
+    }
     final illustrationQuestions = sotsukenExam.questions
         .where((question) => (question.sequence ?? 0) >= 91)
         .toList();

@@ -244,7 +244,8 @@ class DriverQuestion {
       ? [answer]
       : [for (final subquestion in subquestions) subquestion.answer];
 
-  int get pointValue => subquestions.isEmpty ? 1 : 2;
+  int get pointValue =>
+      bankId == 'karimen_test' || subquestions.isNotEmpty ? 2 : 1;
 
   bool isCorrect(AnswerChoice choice) => choice == answer;
 

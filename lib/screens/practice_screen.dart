@@ -317,10 +317,11 @@ class QuestionPracticeRunner extends ConsumerStatefulWidget {
       _QuestionPracticeRunnerState();
 }
 
-class _QuestionPracticeRunnerState
-    extends ConsumerState<QuestionPracticeRunner> {
+class _QuestionPracticeRunnerState extends ConsumerState<QuestionPracticeRunner>
+    with SingleTickerProviderStateMixin {
   static const _defaultExamDurationSeconds = 30 * 60;
   static const _sotsukenExamDurationSeconds = 60 * 60;
+  static const _examPassingScore = 90;
   static final _sotsukenDurationMigrationCutoff = DateTime.utc(
     2026,
     7,
@@ -338,12 +339,17 @@ class _QuestionPracticeRunnerState
   bool _practiceRecordSaved = false;
   Timer? _timer;
   Timer? _draftAutosaveTimer;
+  late final AnimationController _examResultController;
   int? _remainingSeconds;
   _PracticeDetailMode _detailMode = _PracticeDetailMode.explanation;
 
   @override
   void initState() {
     super.initState();
+    _examResultController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
     final draft = widget.initialDraft;
     if (draft != null) {
       final remainingSeconds = _normalizedDraftRemainingSeconds(draft);
@@ -384,6 +390,7 @@ class _QuestionPracticeRunnerState
       unawaited(_saveExamDraft());
     }
     _timer?.cancel();
+    _examResultController.dispose();
     super.dispose();
   }
 
@@ -515,6 +522,7 @@ class _QuestionPracticeRunnerState
       _examSubmitted = true;
       _examSubmitting = true;
     });
+    unawaited(_examResultController.forward(from: 0));
     try {
       await _saveExamResults();
     } catch (error) {
@@ -701,6 +709,17 @@ class _QuestionPracticeRunnerState
     0,
     (total, question) => total + question.pointValue,
   );
+
+  _ExamResultSummary? get _examResult {
+    if (!_isExam || !_examSubmitted) {
+      return null;
+    }
+    return _ExamResultSummary(
+      score: _scorePoints,
+      total: _totalPoints,
+      passingScore: _examPassingScore,
+    );
+  }
 
   String get _timerText {
     final seconds = _remainingSeconds ?? _examDurationSeconds;
@@ -920,6 +939,7 @@ class _QuestionPracticeRunnerState
         };
       }
     }
+    final examResult = _examResult;
 
     return Scaffold(
       appBar: AppBar(
@@ -960,148 +980,162 @@ class _QuestionPracticeRunnerState
           const SizedBox(width: 4),
         ],
       ),
-      body: LiquidBackground(
-        child: question == null
-            ? _EmptyPractice(message: widget.emptyMessage)
-            : LayoutBuilder(
-                builder: (context, constraints) {
-                  final isWide = constraints.maxWidth >= 960;
-                  final content = isWide
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+      body: Stack(
+        children: [
+          LiquidBackground(
+            child: question == null
+                ? _EmptyPractice(message: widget.emptyMessage)
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth >= 960;
+                      final content = isWide
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Expanded(
-                                  child: _QuestionPanel(
-                                    question: question,
-                                    title: widget.subtitle,
-                                    index: _index,
-                                    total: widget.questions.length,
-                                    selectedAnswer: selectedAnswer,
-                                    revealAnswer: _revealAnswer,
-                                    revealUnansweredAnswer: _examSubmitted,
-                                    showRuby: settings.showRuby,
-                                    translations: translations,
-                                    retryTranslations: retryTranslations,
-                                    canChangeAnswer:
-                                        !_examSubmitted &&
-                                        widget.feedbackMode ==
-                                            PracticeFeedbackMode.exam,
-                                    canGoNext: _canGoNext,
-                                    nextLabel: _nextLabel,
-                                    onChoose: (answerIndex, choice) =>
-                                        _choose(question, answerIndex, choice),
-                                    onPrevious: _previous,
-                                    onNext: () => _next(),
-                                  ),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: _QuestionPanel(
+                                        question: question,
+                                        title: widget.subtitle,
+                                        index: _index,
+                                        total: widget.questions.length,
+                                        selectedAnswer: selectedAnswer,
+                                        revealAnswer: _revealAnswer,
+                                        revealUnansweredAnswer: _examSubmitted,
+                                        showRuby: settings.showRuby,
+                                        translations: translations,
+                                        retryTranslations: retryTranslations,
+                                        canChangeAnswer:
+                                            !_examSubmitted &&
+                                            widget.feedbackMode ==
+                                                PracticeFeedbackMode.exam,
+                                        canGoNext: _canGoNext,
+                                        nextLabel: _nextLabel,
+                                        onChoose: (answerIndex, choice) =>
+                                            _choose(
+                                              question,
+                                              answerIndex,
+                                              choice,
+                                            ),
+                                        onPrevious: _previous,
+                                        onNext: () => _next(),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 20),
+                                    SizedBox(
+                                      width: 340,
+                                      child: _SidePanel(
+                                        question: question,
+                                        selectedAnswer: selectedAnswer,
+                                        revealAnswer: _revealAnswer,
+                                        revealUnansweredAnswer: _examSubmitted,
+                                        showRuby: settings.showRuby,
+                                        translations: translations,
+                                        retryTranslations: retryTranslations,
+                                        examResult: examResult,
+                                        examResultAnimation:
+                                            _examResultController,
+                                        index: _index,
+                                        total: widget.questions.length,
+                                        detailMode: _detailMode,
+                                        commentCount: commentCount,
+                                        onDetailModeChanged: (mode) {
+                                          setState(() => _detailMode = mode);
+                                        },
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 20),
-                                SizedBox(
-                                  width: 340,
-                                  child: _SidePanel(
-                                    question: question,
-                                    selectedAnswer: selectedAnswer,
-                                    revealAnswer: _revealAnswer,
-                                    revealUnansweredAnswer: _examSubmitted,
-                                    showRuby: settings.showRuby,
-                                    translations: translations,
-                                    retryTranslations: retryTranslations,
-                                    examSummary: _examSubmitted
-                                        ? '結果 $_scorePoints / $_totalPoints'
-                                        : null,
-                                    index: _index,
-                                    total: widget.questions.length,
-                                    detailMode: _detailMode,
-                                    commentCount: commentCount,
-                                    onDetailModeChanged: (mode) {
-                                      setState(() => _detailMode = mode);
-                                    },
-                                  ),
+                                const SizedBox(height: 12),
+                                _AnswerSheetCard(
+                                  questions: widget.questions,
+                                  answers: _selectedAnswers,
+                                  currentIndex: _index,
+                                  revealAnswer: _revealAnswer,
+                                  revealUnansweredAnswer: _examSubmitted,
+                                  onJumpToQuestion: _jumpToQuestion,
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: 12),
-                            _AnswerSheetCard(
-                              questions: widget.questions,
-                              answers: _selectedAnswers,
-                              currentIndex: _index,
-                              revealAnswer: _revealAnswer,
-                              revealUnansweredAnswer: _examSubmitted,
-                              onJumpToQuestion: _jumpToQuestion,
-                            ),
-                          ],
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _QuestionPanel(
-                              question: question,
-                              title: widget.subtitle,
-                              index: _index,
-                              total: widget.questions.length,
-                              selectedAnswer: selectedAnswer,
-                              revealAnswer: _revealAnswer,
-                              revealUnansweredAnswer: _examSubmitted,
-                              showRuby: settings.showRuby,
-                              translations: translations,
-                              retryTranslations: retryTranslations,
-                              canChangeAnswer:
-                                  !_examSubmitted &&
-                                  widget.feedbackMode ==
-                                      PracticeFeedbackMode.exam,
-                              canGoNext: _canGoNext,
-                              nextLabel: _nextLabel,
-                              onChoose: (answerIndex, choice) =>
-                                  _choose(question, answerIndex, choice),
-                              onPrevious: _previous,
-                              onNext: () => _next(),
-                            ),
-                            const SizedBox(height: 12),
-                            if (_examSubmitted) ...[
-                              _ExamSummaryCard(
-                                text: '結果 $_scorePoints / $_totalPoints',
-                              ),
-                              const SizedBox(height: 12),
-                            ],
-                            _QuestionDetailPanel(
-                              question: question,
-                              selectedAnswer: selectedAnswer,
-                              revealAnswer: _revealAnswer,
-                              revealUnansweredAnswer: _examSubmitted,
-                              showRuby: settings.showRuby,
-                              translations: translations,
-                              retryTranslations: retryTranslations,
-                              mode: _detailMode,
-                              commentCount: commentCount,
-                              onModeChanged: (mode) {
-                                setState(() => _detailMode = mode);
-                              },
-                            ),
-                            const SizedBox(height: 12),
-                            _AnswerSheetCard(
-                              questions: widget.questions,
-                              answers: _selectedAnswers,
-                              currentIndex: _index,
-                              revealAnswer: _revealAnswer,
-                              revealUnansweredAnswer: _examSubmitted,
-                              onJumpToQuestion: _jumpToQuestion,
-                            ),
-                          ],
-                        );
+                            )
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _QuestionPanel(
+                                  question: question,
+                                  title: widget.subtitle,
+                                  index: _index,
+                                  total: widget.questions.length,
+                                  selectedAnswer: selectedAnswer,
+                                  revealAnswer: _revealAnswer,
+                                  revealUnansweredAnswer: _examSubmitted,
+                                  showRuby: settings.showRuby,
+                                  translations: translations,
+                                  retryTranslations: retryTranslations,
+                                  canChangeAnswer:
+                                      !_examSubmitted &&
+                                      widget.feedbackMode ==
+                                          PracticeFeedbackMode.exam,
+                                  canGoNext: _canGoNext,
+                                  nextLabel: _nextLabel,
+                                  onChoose: (answerIndex, choice) =>
+                                      _choose(question, answerIndex, choice),
+                                  onPrevious: _previous,
+                                  onNext: () => _next(),
+                                ),
+                                const SizedBox(height: 12),
+                                if (examResult != null) ...[
+                                  _ExamSummaryCard(
+                                    result: examResult,
+                                    animation: _examResultController,
+                                  ),
+                                  const SizedBox(height: 12),
+                                ],
+                                _QuestionDetailPanel(
+                                  question: question,
+                                  selectedAnswer: selectedAnswer,
+                                  revealAnswer: _revealAnswer,
+                                  revealUnansweredAnswer: _examSubmitted,
+                                  showRuby: settings.showRuby,
+                                  translations: translations,
+                                  retryTranslations: retryTranslations,
+                                  mode: _detailMode,
+                                  commentCount: commentCount,
+                                  onModeChanged: (mode) {
+                                    setState(() => _detailMode = mode);
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+                                _AnswerSheetCard(
+                                  questions: widget.questions,
+                                  answers: _selectedAnswers,
+                                  currentIndex: _index,
+                                  revealAnswer: _revealAnswer,
+                                  revealUnansweredAnswer: _examSubmitted,
+                                  onJumpToQuestion: _jumpToQuestion,
+                                ),
+                              ],
+                            );
 
-                  return SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1160),
-                        child: content,
-                      ),
-                    ),
-                  );
-                },
-              ),
+                      return SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 1160),
+                            child: content,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          if (examResult != null)
+            _ExamResultOverlay(
+              result: examResult,
+              animation: _examResultController,
+            ),
+        ],
       ),
     );
   }
@@ -1527,7 +1561,8 @@ class _SidePanel extends StatelessWidget {
     required this.showRuby,
     required this.translations,
     required this.retryTranslations,
-    required this.examSummary,
+    required this.examResult,
+    required this.examResultAnimation,
     required this.index,
     required this.total,
     required this.detailMode,
@@ -1542,7 +1577,8 @@ class _SidePanel extends StatelessWidget {
   final bool showRuby;
   final Map<TranslationLanguage, _TranslationState> translations;
   final Map<TranslationLanguage, VoidCallback> retryTranslations;
-  final String? examSummary;
+  final _ExamResultSummary? examResult;
+  final Animation<double> examResultAnimation;
   final int index;
   final int total;
   final _PracticeDetailMode detailMode;
@@ -1598,8 +1634,8 @@ class _SidePanel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        if (examSummary != null) ...[
-          _ExamSummaryCard(text: examSummary!),
+        if (examResult != null) ...[
+          _ExamSummaryCard(result: examResult!, animation: examResultAnimation),
           const SizedBox(height: 12),
         ],
         _QuestionDetailPanel(
@@ -2036,33 +2072,387 @@ String _formatCommentTime(DateTime value) {
   return '$month/$day $hour:$minute';
 }
 
-class _ExamSummaryCard extends StatelessWidget {
-  const _ExamSummaryCard({required this.text});
+class _ExamResultSummary {
+  const _ExamResultSummary({
+    required this.score,
+    required this.total,
+    required this.passingScore,
+  });
 
-  final String text;
+  final int score;
+  final int total;
+  final int passingScore;
+
+  bool get passed => score >= passingScore;
+
+  int get pointsToPass => math.max(0, passingScore - score);
+
+  String get title => passed ? '合格おめでとうございます' : '不合格';
+
+  String get message => passed ? '合格ラインをクリアしました' : '合格まであと$pointsToPass点です';
+
+  String get statusLabel => passed ? '合格' : '不合格';
+}
+
+class _ExamSummaryCard extends StatelessWidget {
+  const _ExamSummaryCard({required this.result, required this.animation});
+
+  final _ExamResultSummary result;
+  final Animation<double> animation;
 
   @override
   Widget build(BuildContext context) {
-    return LiquidGlass(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          const LiquidIconBadge(
-            icon: Icons.fact_check_outlined,
-            color: LiquidColors.primary,
-            size: 34,
+    final color = result.passed ? LiquidColors.success : LiquidColors.danger;
+    final icon = result.passed
+        ? Icons.emoji_events_outlined
+        : Icons.error_outline_rounded;
+    final isDark = LiquidColors.isDark(context);
+
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, child) {
+        final progress = animation.value.clamp(0.0, 1.0).toDouble();
+        final entrance = Curves.easeOutBack.transform(
+          math.min(1.0, progress / 0.55),
+        );
+        final opacity = math.min(1.0, progress * 4);
+        final shakeOffset = result.passed
+            ? 0.0
+            : math.sin(progress * math.pi * 10) * (1 - progress) * 8;
+
+        return Opacity(
+          opacity: opacity,
+          child: Transform.translate(
+            offset: Offset(shakeOffset, 0),
+            child: Transform.scale(
+              scale: 0.96 + entrance * 0.04,
+              child: LiquidGlass(
+                padding: EdgeInsets.zero,
+                strong: true,
+                tint: color.withValues(alpha: isDark ? 0.18 : 0.08),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: _ExamCardEffectPainter(
+                            progress: progress,
+                            passed: result.passed,
+                            color: color,
+                            isDark: isDark,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              LiquidIconBadge(
+                                icon: icon,
+                                color: color,
+                                size: 42,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      result.title,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            color: color,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      result.message,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: LiquidColors.muted(context),
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              _ResultBadge(
+                                label: result.statusLabel,
+                                color: color,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                '得点 ${result.score} / ${result.total}',
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0,
+                                    ),
+                              ),
+                              _ResultBadge(
+                                label: '合格ライン ${result.passingScore}点',
+                                color: LiquidColors.primary,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          const SizedBox(width: 10),
-          Text(
-            text,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        );
+      },
+    );
+  }
+}
+
+class _ResultBadge extends StatelessWidget {
+  const _ResultBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(
+          alpha: LiquidColors.isDark(context) ? 0.18 : 0.11,
+        ),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: color,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0,
           ),
-        ],
+        ),
       ),
     );
   }
+}
+
+class _ExamResultOverlay extends StatelessWidget {
+  const _ExamResultOverlay({required this.result, required this.animation});
+
+  final _ExamResultSummary result;
+  final Animation<double> animation;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: animation,
+        builder: (context, child) {
+          final progress = animation.value.clamp(0.0, 1.0).toDouble();
+          final fadeOut = progress < 0.82
+              ? 1.0
+              : ((1 - progress) / 0.18).clamp(0.0, 1.0).toDouble();
+          if (fadeOut <= 0) {
+            return const SizedBox.shrink();
+          }
+          return Opacity(
+            opacity: result.passed ? fadeOut : fadeOut * 0.82,
+            child: CustomPaint(
+              painter: _ExamResultOverlayPainter(
+                progress: progress,
+                passed: result.passed,
+                isDark: LiquidColors.isDark(context),
+              ),
+              child: const SizedBox.expand(),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ExamCardEffectPainter extends CustomPainter {
+  const _ExamCardEffectPainter({
+    required this.progress,
+    required this.passed,
+    required this.color,
+    required this.isDark,
+  });
+
+  final double progress;
+  final bool passed;
+  final Color color;
+  final bool isDark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (passed) {
+      _paintConfetti(canvas, size, progress, overlay: false);
+      return;
+    }
+
+    final pulse = Curves.easeOutCubic.transform(math.min(1.0, progress / 0.7));
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 2
+      ..color = color.withValues(alpha: (1 - pulse) * 0.32);
+    final center = Offset(size.width - 44, 42);
+    canvas.drawCircle(center, 18 + pulse * 28, paint);
+
+    final slashPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 2.6
+      ..color = color.withValues(alpha: isDark ? 0.32 : 0.24);
+    final crack = Path()
+      ..moveTo(size.width - 84, 12)
+      ..lineTo(size.width - 64, 32)
+      ..lineTo(size.width - 76, 54)
+      ..lineTo(size.width - 50, 80);
+    canvas.drawPath(crack, slashPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ExamCardEffectPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.passed != passed ||
+        oldDelegate.color != color ||
+        oldDelegate.isDark != isDark;
+  }
+}
+
+class _ExamResultOverlayPainter extends CustomPainter {
+  const _ExamResultOverlayPainter({
+    required this.progress,
+    required this.passed,
+    required this.isDark,
+  });
+
+  final double progress;
+  final bool passed;
+  final bool isDark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (passed) {
+      _paintConfetti(canvas, size, progress, overlay: true);
+      return;
+    }
+
+    final washPaint = Paint()
+      ..color = LiquidColors.danger.withValues(
+        alpha: (1 - progress) * (isDark ? 0.20 : 0.12),
+      );
+    canvas.drawRect(Offset.zero & size, washPaint);
+
+    final center = size.center(Offset.zero);
+    final pulse = Curves.easeOutCubic.transform(math.min(1.0, progress / 0.76));
+    final ringPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 6
+      ..color = LiquidColors.danger.withValues(alpha: (1 - pulse) * 0.42);
+    canvas.drawCircle(center, 36 + size.shortestSide * 0.2 * pulse, ringPaint);
+
+    final crossProgress = Curves.easeOutBack.transform(
+      math.min(1.0, progress / 0.45),
+    );
+    final length = size.shortestSide * 0.15 * crossProgress;
+    final crossPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 8
+      ..color = LiquidColors.danger.withValues(
+        alpha: (1 - progress * 0.45).clamp(0.0, 1.0).toDouble(),
+      );
+    canvas.drawLine(
+      center.translate(-length, -length),
+      center.translate(length, length),
+      crossPaint,
+    );
+    canvas.drawLine(
+      center.translate(length, -length),
+      center.translate(-length, length),
+      crossPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ExamResultOverlayPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.passed != passed ||
+        oldDelegate.isDark != isDark;
+  }
+}
+
+void _paintConfetti(
+  Canvas canvas,
+  Size size,
+  double progress, {
+  required bool overlay,
+}) {
+  final palette = [
+    LiquidColors.success,
+    LiquidColors.amber,
+    LiquidColors.sky,
+    LiquidColors.vermilion,
+    LiquidColors.primary,
+  ];
+  final paint = Paint()..style = PaintingStyle.fill;
+  final count = overlay ? 86 : 24;
+  for (var i = 0; i < count; i += 1) {
+    final delay = _unit(i, 11) * 0.28;
+    final local = ((progress - delay) / (1 - delay)).clamp(0.0, 1.0).toDouble();
+    if (local <= 0 || local >= 1) {
+      continue;
+    }
+    final drift = math.sin(local * math.pi * 2 + i) * (overlay ? 38 : 14);
+    final x = size.width * _unit(i, 3) + drift;
+    final y = -24 + (size.height + 58) * local;
+    final alpha = math.sin(local * math.pi).clamp(0.0, 1.0).toDouble();
+    final width = (overlay ? 7.0 : 5.0) + _unit(i, 17) * 6;
+    final height = overlay ? 4.0 : 3.0;
+
+    paint.color = palette[i % palette.length].withValues(alpha: alpha);
+    canvas.save();
+    canvas.translate(x, y);
+    canvas.rotate(local * math.pi * 3 + i * 0.33);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset.zero, width: width, height: height),
+        const Radius.circular(1.5),
+      ),
+      paint,
+    );
+    canvas.restore();
+  }
+}
+
+double _unit(int index, int salt) {
+  return ((index * 37 + salt * 53) % 101) / 100;
 }
 
 class _TimerBadge extends StatelessWidget {
