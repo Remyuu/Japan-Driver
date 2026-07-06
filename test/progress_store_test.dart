@@ -75,6 +75,35 @@ void main() {
     expect(draft?.remainingSeconds, 1725);
   });
 
+  test('drops empty answer entries from saved practice drafts', () {
+    final decoded = ProgressStore.decode('''
+{
+  "version": 3,
+  "questions": {},
+  "drafts": {
+    "karimen_1to1|instant|workbook:1": {
+      "sessionId": "karimen_1to1|instant|workbook:1",
+      "currentIndex": 2,
+      "answers": {
+        "0": {},
+        "1": {"0": "○"},
+        "2": {}
+      },
+      "savedAt": "2026-07-06T00:00:00.000Z"
+    }
+  },
+  "records": [],
+  "comments": {},
+  "favorites": {}
+}
+''');
+
+    final draft = decoded.drafts['karimen_1to1|instant|workbook:1'];
+
+    expect(draft?.answers.keys, [1]);
+    expect(draft?.answers[1]?[0], AnswerChoice.circle);
+  });
+
   test('encodes and decodes practice records', () {
     final store = ProgressStore.empty().addRecord(
       PracticeRecord(

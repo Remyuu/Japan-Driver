@@ -26,6 +26,14 @@ class HomeScreen extends ConsumerWidget {
       context.push('/favorites/$stageId');
     }
 
+    void openWrongReview() {
+      if (!hasAccount) {
+        showAccountDialog(context, ref);
+        return;
+      }
+      context.push('/review/wrong');
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Japan Driver'),
@@ -50,7 +58,13 @@ class HomeScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _DashboardHero(progress: progress, hasAccount: hasAccount),
+                    _DashboardHero(
+                      progress: progress,
+                      hasAccount: hasAccount,
+                      onKarimenPractice: () => context.push('/stage/karimen'),
+                      onSotsukenPractice: () => context.push('/stage/sotsuken'),
+                      onWrongReview: openWrongReview,
+                    ),
                     const SizedBox(height: 18),
                     const LiquidSectionLabel(
                       title: '問題集',
@@ -136,10 +150,19 @@ class HomeScreen extends ConsumerWidget {
 }
 
 class _DashboardHero extends StatelessWidget {
-  const _DashboardHero({required this.progress, required this.hasAccount});
+  const _DashboardHero({
+    required this.progress,
+    required this.hasAccount,
+    required this.onKarimenPractice,
+    required this.onSotsukenPractice,
+    required this.onWrongReview,
+  });
 
   final ProgressStore progress;
   final bool hasAccount;
+  final VoidCallback onKarimenPractice;
+  final VoidCallback onSotsukenPractice;
+  final VoidCallback onWrongReview;
 
   @override
   Widget build(BuildContext context) {
@@ -218,6 +241,32 @@ class _DashboardHero extends StatelessWidget {
                   value: hasAccount ? '${progress.wrongQuestionCount}問' : '--',
                   icon: Icons.error_outline_rounded,
                   color: LiquidColors.vermilion,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              FilledButton.icon(
+                onPressed: onKarimenPractice,
+                icon: const Icon(Icons.traffic_rounded),
+                label: const Text('仮免を練習'),
+              ),
+              FilledButton.icon(
+                onPressed: onSotsukenPractice,
+                icon: const Icon(Icons.route_rounded),
+                label: const Text('本免を練習'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onWrongReview,
+                icon: const Icon(Icons.replay_rounded),
+                label: Text(
+                  hasAccount
+                      ? '間違えた問題を練習（${progress.wrongQuestionCount}問）'
+                      : '間違えた問題を練習',
                 ),
               ),
             ],

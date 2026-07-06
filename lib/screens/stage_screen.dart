@@ -125,6 +125,7 @@ class _StageMenuContent extends ConsumerWidget {
                             width: width,
                             child: _StageSectionOption(
                               section: section,
+                              subtitle: _sectionSubtitle(config, section),
                               isLocked:
                                   !hasAccount &&
                                   section != _StageSection.oneToOne,
@@ -150,6 +151,13 @@ class _StageMenuContent extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  String _sectionSubtitle(_StageConfig config, _StageSection section) {
+    if (section == _StageSection.exam && config.id == 'sotsuken') {
+      return '60分でまとめて答える';
+    }
+    return section.subtitle;
   }
 }
 
@@ -482,11 +490,13 @@ enum _StageSection {
 class _StageSectionOption extends StatelessWidget {
   const _StageSectionOption({
     required this.section,
+    required this.subtitle,
     required this.onTap,
     required this.isLocked,
   });
 
   final _StageSection section;
+  final String subtitle;
   final VoidCallback onTap;
   final bool isLocked;
 
@@ -512,7 +522,7 @@ class _StageSectionOption extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  section.subtitle,
+                  subtitle,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: LiquidColors.muted(context),
                   ),

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-
 import '../design/liquid_glass.dart';
 import '../models/progress_store.dart';
 import '../models/question_bank.dart';
@@ -47,7 +45,7 @@ class StatsScreen extends ConsumerWidget {
                     constraints: const BoxConstraints(maxWidth: 520),
                     child: AccountRequiredCard(
                       title: '統計にはアカウント連携が必要です',
-                      message: '回答数、正答率、間違い復習、解答記録は連携したアカウントに保存されます。',
+                      message: '回答数、正答率、問題集ごとの進捗は連携したアカウントに保存されます。',
                       icon: Icons.bar_chart_rounded,
                     ),
                   ),
@@ -94,8 +92,6 @@ class _StatsContent extends StatelessWidget {
                   wrong: progress.wrongQuestionCount,
                   attempts: progress.totalAttempts,
                 ),
-                const SizedBox(height: 18),
-                _StatsActionRow(progress: progress),
                 const SizedBox(height: 18),
                 const LiquidSectionLabel(
                   title: '問題集ごとの進捗',
@@ -221,99 +217,6 @@ class _StatsHero extends StatelessWidget {
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatsActionRow extends StatelessWidget {
-  const _StatsActionRow({required this.progress});
-
-  final ProgressStore progress;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 720;
-        final width = isWide
-            ? (constraints.maxWidth - 12) / 2
-            : constraints.maxWidth;
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            SizedBox(
-              width: width,
-              child: _StatsActionTile(
-                title: '間違い復習',
-                value: '${progress.wrongQuestionCount}問',
-                icon: Icons.replay_rounded,
-                color: LiquidColors.vermilion,
-                onTap: () => context.push('/review/wrong'),
-              ),
-            ),
-            SizedBox(
-              width: width,
-              child: _StatsActionTile(
-                title: '解答記録',
-                value: '${progress.records.length}件',
-                icon: Icons.fact_check_outlined,
-                color: LiquidColors.sky,
-                onTap: () => context.push('/records'),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _StatsActionTile extends StatelessWidget {
-  const _StatsActionTile({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return LiquidGlass(
-      onTap: onTap,
-      padding: const EdgeInsets.all(16),
-      enableBlur: false,
-      child: Row(
-        children: [
-          LiquidIconBadge(icon: icon, color: color),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-            ),
-          ),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0,
-            ),
-          ),
-          const SizedBox(width: 6),
-          const Icon(Icons.chevron_right_rounded),
         ],
       ),
     );

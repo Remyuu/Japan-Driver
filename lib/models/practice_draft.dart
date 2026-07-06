@@ -36,28 +36,42 @@ class PracticeDraft {
     return PracticeDraft(
       sessionId: json['sessionId'] as String,
       currentIndex: json['currentIndex'] as int? ?? 0,
-      answers: {
-        if (rawAnswers is Map)
-          for (final entry in rawAnswers.entries)
-            if (int.tryParse('${entry.key}') != null)
-              int.parse('${entry.key}'): switch (entry.value) {
-                final String value => {0: AnswerChoice.fromRaw(value)},
-                final Map value => {
-                  for (final answer in value.entries)
-                    if (int.tryParse('${answer.key}') != null &&
-                        answer.value is String)
-                      int.parse('${answer.key}'): AnswerChoice.fromRaw(
-                        answer.value as String,
-                      ),
-                },
-                _ => <int, AnswerChoice>{},
-              },
-      },
+      answers: _parseAnswers(rawAnswers),
       savedAt:
           DateTime.tryParse(json['savedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       remainingSeconds: json['remainingSeconds'] as int?,
     );
+  }
+
+  static Map<int, Map<int, AnswerChoice>> _parseAnswers(Object? rawAnswers) {
+    final parsed = <int, Map<int, AnswerChoice>>{};
+    if (rawAnswers is! Map) {
+      return parsed;
+    }
+
+    for (final entry in rawAnswers.entries) {
+      final questionIndex = int.tryParse('${entry.key}');
+      if (questionIndex == null) {
+        continue;
+      }
+      final answers = switch (entry.value) {
+        final String value => {0: AnswerChoice.fromRaw(value)},
+        final Map value => {
+          for (final answer in value.entries)
+            if (int.tryParse('${answer.key}') != null && answer.value is String)
+              int.parse('${answer.key}'): AnswerChoice.fromRaw(
+                answer.value as String,
+              ),
+        },
+        _ => <int, AnswerChoice>{},
+      };
+      if (answers.isNotEmpty) {
+        parsed[questionIndex] = answers;
+      }
+    }
+
+    return parsed;
   }
 }
 

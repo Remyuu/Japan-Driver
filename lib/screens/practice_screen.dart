@@ -209,23 +209,25 @@ class PracticeScreen extends ConsumerWidget {
   }
 }
 
-class WrongReviewScreen extends ConsumerWidget {
+class WrongReviewScreen extends ConsumerStatefulWidget {
   const WrongReviewScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WrongReviewScreen> createState() => _WrongReviewScreenState();
+}
+
+class _WrongReviewScreenState extends ConsumerState<WrongReviewScreen> {
+  List<String>? _sessionWrongIds;
+
+  @override
+  Widget build(BuildContext context) {
     final userAsync = ref.watch(accountUserProvider);
     final user = userAsync.value;
     final banksAsync = ref.watch(questionBanksProvider);
-    final progress = ref
-        .watch(progressControllerProvider)
-        .when(
-          data: (store) => store,
-          error: (error, stackTrace) => ProgressStore.empty(),
-          loading: ProgressStore.empty,
-        );
+    final progressAsync = ref.watch(progressControllerProvider);
 
-    if (userAsync.isLoading) {
+    if (userAsync.isLoading ||
+        (user != null && progressAsync.isLoading && !progressAsync.hasValue)) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (user == null) {
@@ -253,6 +255,7 @@ class WrongReviewScreen extends ConsumerWidget {
         ),
       );
     }
+    final progress = progressAsync.value ?? ProgressStore.empty();
 
     return banksAsync.when(
       data: (banks) {
@@ -262,8 +265,10 @@ class WrongReviewScreen extends ConsumerWidget {
             byId.putIfAbsent(question.canonicalId, () => question);
           }
         }
+        final sessionWrongIds = _sessionWrongIds ??=
+            (progress.wrongQuestionIds.toList()..sort());
         final wrongQuestions = [
-          for (final id in progress.wrongQuestionIds)
+          for (final id in sessionWrongIds)
             if (byId[id] != null) byId[id]!,
         ]..sort((a, b) => a.questionKey.compareTo(b.questionKey));
 
@@ -316,13 +321,23 @@ class _QuestionPracticeRunnerState
     extends ConsumerState<QuestionPracticeRunner> {
   static const _defaultExamDurationSeconds = 30 * 60;
   static const _sotsukenExamDurationSeconds = 60 * 60;
+  static final _sotsukenDurationMigrationCutoff = DateTime.utc(
+    2026,
+    7,
+    5,
+    8,
+    51,
+    16,
+  );
 
   int _index = 0;
   final Map<int, Map<int, AnswerChoice>> _selectedAnswers = {};
   bool _examSubmitted = false;
+  bool _examSubmitting = false;
   bool _examResultsSaved = false;
   bool _practiceRecordSaved = false;
   Timer? _timer;
+  Timer? _draftAutosaveTimer;
   int? _remainingSeconds;
   _PracticeDetailMode _detailMode = _PracticeDetailMode.explanation;
 
@@ -331,20 +346,43 @@ class _QuestionPracticeRunnerState
     super.initState();
     final draft = widget.initialDraft;
     if (draft != null) {
-      _index = draft.currentIndex
-          .clamp(0, math.max(widget.questions.length - 1, 0))
-          .toInt();
-      _selectedAnswers.addAll(draft.answers);
-      _remainingSeconds = draft.remainingSeconds;
+      final remainingSeconds = _normalizedDraftRemainingSeconds(draft);
+      final isExpiredExamDraft =
+          _isExam && remainingSeconds != null && remainingSeconds <= 0;
+      if (isExpiredExamDraft) {
+        unawaited(
+          ref
+              .read(progressControllerProvider.notifier)
+              .removeDraft(widget.sessionId),
+        );
+      } else {
+        _index = draft.currentIndex
+            .clamp(0, math.max(widget.questions.length - 1, 0))
+            .toInt();
+        _selectedAnswers.addAll({
+          for (final entry in draft.answers.entries)
+            if (entry.value.isNotEmpty)
+              entry.key: Map<int, AnswerChoice>.of(entry.value),
+        });
+        _remainingSeconds = remainingSeconds;
+      }
     }
     if (_isExam) {
       _remainingSeconds ??= _examDurationSeconds;
+      if (_remainingSeconds! <= 0) {
+        _remainingSeconds = _examDurationSeconds;
+      }
       _startTimer();
+      unawaited(_saveExamDraft());
     }
   }
 
   @override
   void dispose() {
+    _draftAutosaveTimer?.cancel();
+    if (_isExam && !_examSubmitted) {
+      unawaited(_saveExamDraft());
+    }
     _timer?.cancel();
     super.dispose();
   }
@@ -375,6 +413,7 @@ class _QuestionPracticeRunnerState
     setState(() {
       _selectedAnswers.putIfAbsent(_index, () => {})[answerIndex] = choice;
     });
+    _scheduleExamDraftAutosave(immediate: true);
     final response = _selectedAnswers[_index] ?? const {};
     if (widget.feedbackMode == PracticeFeedbackMode.instant &&
         question.isResponseComplete(response)) {
@@ -434,15 +473,19 @@ class _QuestionPracticeRunnerState
       ));
     }
     await ref.read(progressControllerProvider.notifier).recordAnswers(answers);
-    _examResultsSaved = true;
     await _savePracticeRecord();
     await ref
         .read(progressControllerProvider.notifier)
         .removeDraft(widget.sessionId);
+    _examResultsSaved = true;
   }
 
   void _startTimer() {
     _timer?.cancel();
+    final initialRemaining = _remainingSeconds ?? _examDurationSeconds;
+    if (initialRemaining <= 0) {
+      _remainingSeconds = _examDurationSeconds;
+    }
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted || !_isExam || _examSubmitted) {
         timer.cancel();
@@ -452,23 +495,37 @@ class _QuestionPracticeRunnerState
       if (remaining <= 1) {
         setState(() => _remainingSeconds = 0);
         timer.cancel();
-        _submitExam();
+        unawaited(_submitExam(timeExpired: true));
         return;
       }
       setState(() => _remainingSeconds = remaining - 1);
+      _scheduleExamDraftAutosave();
     });
   }
 
-  Future<void> _submitExam() async {
-    if (_examSubmitted) {
-      return;
-    }
-    await _saveExamResults();
-    if (!mounted) {
+  Future<void> _submitExam({bool timeExpired = false}) async {
+    if (_examSubmitted || _examSubmitting) {
       return;
     }
     _timer?.cancel();
-    setState(() => _examSubmitted = true);
+    setState(() {
+      if (timeExpired) {
+        _remainingSeconds = 0;
+      }
+      _examSubmitted = true;
+      _examSubmitting = true;
+    });
+    try {
+      await _saveExamResults();
+    } catch (error) {
+      if (mounted) {
+        _showSyncError(error);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _examSubmitting = false);
+      }
+    }
   }
 
   Future<void> _next() async {
@@ -486,6 +543,7 @@ class _QuestionPracticeRunnerState
     setState(() {
       _index += 1;
     });
+    _scheduleExamDraftAutosave(immediate: _isExam);
   }
 
   void _previous() {
@@ -495,6 +553,7 @@ class _QuestionPracticeRunnerState
     setState(() {
       _index -= 1;
     });
+    _scheduleExamDraftAutosave(immediate: _isExam);
   }
 
   Future<void> _finish() async {
@@ -586,11 +645,30 @@ class _QuestionPracticeRunnerState
       ? _sotsukenExamDurationSeconds
       : _defaultExamDurationSeconds;
 
+  int? _normalizedDraftRemainingSeconds(PracticeDraft draft) {
+    final remainingSeconds = draft.remainingSeconds;
+    if (remainingSeconds == null) {
+      return null;
+    }
+    if (widget.sessionId.startsWith('sotsuken_test|exam|') &&
+        draft.savedAt.isBefore(_sotsukenDurationMigrationCutoff) &&
+        remainingSeconds <= _defaultExamDurationSeconds) {
+      return math.min(
+        remainingSeconds + _defaultExamDurationSeconds,
+        _sotsukenExamDurationSeconds,
+      );
+    }
+    return remainingSeconds.clamp(0, _examDurationSeconds).toInt();
+  }
+
   bool get _revealAnswer => !_isExam || _examSubmitted;
 
   bool get _canGoNext {
     if (widget.questions.isEmpty) {
       return false;
+    }
+    if (_isExam && _examSubmitted) {
+      return true;
     }
     if (_isExam && !_examSubmitted) {
       return true;
@@ -631,22 +709,56 @@ class _QuestionPracticeRunnerState
     return '$minutes:${rest.toString().padLeft(2, '0')}';
   }
 
+  PracticeDraft _currentDraft() {
+    return PracticeDraft(
+      sessionId: widget.sessionId,
+      currentIndex: _index,
+      answers: {
+        for (final entry in _selectedAnswers.entries)
+          if (entry.value.isNotEmpty)
+            entry.key: Map<int, AnswerChoice>.of(entry.value),
+      },
+      savedAt: DateTime.now(),
+      remainingSeconds: _isExam ? _remainingSeconds : null,
+    );
+  }
+
+  void _scheduleExamDraftAutosave({bool immediate = false}) {
+    if (!_isExam || _examSubmitted) {
+      return;
+    }
+    _draftAutosaveTimer?.cancel();
+    if (immediate) {
+      unawaited(_saveExamDraft());
+      return;
+    }
+    final remainingSeconds = _remainingSeconds ?? _examDurationSeconds;
+    if (remainingSeconds % 10 != 0) {
+      return;
+    }
+    _draftAutosaveTimer = Timer(const Duration(milliseconds: 300), () {
+      unawaited(_saveExamDraft());
+    });
+  }
+
+  Future<void> _saveExamDraft() async {
+    if (!_isExam || _examSubmitted || widget.questions.isEmpty) {
+      return;
+    }
+    try {
+      await ref
+          .read(progressControllerProvider.notifier)
+          .saveDraft(_currentDraft());
+    } catch (_) {
+      // Autosave should not interrupt the exam flow.
+    }
+  }
+
   Future<void> _saveDraftAndLeave() async {
     try {
       await ref
           .read(progressControllerProvider.notifier)
-          .saveDraft(
-            PracticeDraft(
-              sessionId: widget.sessionId,
-              currentIndex: _index,
-              answers: {
-                for (final entry in _selectedAnswers.entries)
-                  entry.key: Map<int, AnswerChoice>.of(entry.value),
-              },
-              savedAt: DateTime.now(),
-              remainingSeconds: _isExam ? _remainingSeconds : null,
-            ),
-          );
+          .saveDraft(_currentDraft());
     } catch (error) {
       if (mounted) {
         _showSyncError(error);
@@ -869,6 +981,7 @@ class _QuestionPracticeRunnerState
                                     total: widget.questions.length,
                                     selectedAnswer: selectedAnswer,
                                     revealAnswer: _revealAnswer,
+                                    revealUnansweredAnswer: _examSubmitted,
                                     showRuby: settings.showRuby,
                                     translations: translations,
                                     retryTranslations: retryTranslations,
@@ -891,6 +1004,7 @@ class _QuestionPracticeRunnerState
                                     question: question,
                                     selectedAnswer: selectedAnswer,
                                     revealAnswer: _revealAnswer,
+                                    revealUnansweredAnswer: _examSubmitted,
                                     showRuby: settings.showRuby,
                                     translations: translations,
                                     retryTranslations: retryTranslations,
@@ -914,6 +1028,7 @@ class _QuestionPracticeRunnerState
                               answers: _selectedAnswers,
                               currentIndex: _index,
                               revealAnswer: _revealAnswer,
+                              revealUnansweredAnswer: _examSubmitted,
                               onJumpToQuestion: _jumpToQuestion,
                             ),
                           ],
@@ -928,6 +1043,7 @@ class _QuestionPracticeRunnerState
                               total: widget.questions.length,
                               selectedAnswer: selectedAnswer,
                               revealAnswer: _revealAnswer,
+                              revealUnansweredAnswer: _examSubmitted,
                               showRuby: settings.showRuby,
                               translations: translations,
                               retryTranslations: retryTranslations,
@@ -953,6 +1069,7 @@ class _QuestionPracticeRunnerState
                               question: question,
                               selectedAnswer: selectedAnswer,
                               revealAnswer: _revealAnswer,
+                              revealUnansweredAnswer: _examSubmitted,
                               showRuby: settings.showRuby,
                               translations: translations,
                               retryTranslations: retryTranslations,
@@ -968,6 +1085,7 @@ class _QuestionPracticeRunnerState
                               answers: _selectedAnswers,
                               currentIndex: _index,
                               revealAnswer: _revealAnswer,
+                              revealUnansweredAnswer: _examSubmitted,
                               onJumpToQuestion: _jumpToQuestion,
                             ),
                           ],
@@ -997,6 +1115,7 @@ class _QuestionPanel extends StatelessWidget {
     required this.total,
     required this.selectedAnswer,
     required this.revealAnswer,
+    required this.revealUnansweredAnswer,
     required this.showRuby,
     required this.translations,
     required this.retryTranslations,
@@ -1014,6 +1133,7 @@ class _QuestionPanel extends StatelessWidget {
   final int total;
   final Map<int, AnswerChoice>? selectedAnswer;
   final bool revealAnswer;
+  final bool revealUnansweredAnswer;
   final bool showRuby;
   final Map<TranslationLanguage, _TranslationState> translations;
   final Map<TranslationLanguage, VoidCallback> retryTranslations;
@@ -1072,6 +1192,7 @@ class _QuestionPanel extends StatelessWidget {
               selectedAnswer: selectedAnswer?[0],
               correctAnswer: question.answer,
               revealAnswer: revealAnswer,
+              revealUnansweredAnswer: revealUnansweredAnswer,
               canChangeAnswer: canChangeAnswer,
               onChoose: (choice) => onChoose(0, choice),
             )
@@ -1082,6 +1203,7 @@ class _QuestionPanel extends StatelessWidget {
                 subquestion: question.subquestions[i],
                 selectedAnswer: selectedAnswer?[i],
                 revealAnswer: revealAnswer,
+                revealUnansweredAnswer: revealUnansweredAnswer,
                 showRuby: showRuby,
                 translations: translations,
                 retryTranslations: retryTranslations,
@@ -1119,6 +1241,7 @@ class _SubquestionCard extends StatelessWidget {
     required this.subquestion,
     required this.selectedAnswer,
     required this.revealAnswer,
+    required this.revealUnansweredAnswer,
     required this.showRuby,
     required this.translations,
     required this.retryTranslations,
@@ -1130,6 +1253,7 @@ class _SubquestionCard extends StatelessWidget {
   final DriverSubquestion subquestion;
   final AnswerChoice? selectedAnswer;
   final bool revealAnswer;
+  final bool revealUnansweredAnswer;
   final bool showRuby;
   final Map<TranslationLanguage, _TranslationState> translations;
   final Map<TranslationLanguage, VoidCallback> retryTranslations;
@@ -1172,6 +1296,7 @@ class _SubquestionCard extends StatelessWidget {
               selectedAnswer: selectedAnswer,
               correctAnswer: subquestion.answer,
               revealAnswer: revealAnswer,
+              revealUnansweredAnswer: revealUnansweredAnswer,
               canChangeAnswer: canChangeAnswer,
               onChoose: onChoose,
               compact: true,
@@ -1188,6 +1313,7 @@ class _AnswerButtonPair extends StatelessWidget {
     required this.selectedAnswer,
     required this.correctAnswer,
     required this.revealAnswer,
+    required this.revealUnansweredAnswer,
     required this.canChangeAnswer,
     required this.onChoose,
     this.compact = false,
@@ -1196,6 +1322,7 @@ class _AnswerButtonPair extends StatelessWidget {
   final AnswerChoice? selectedAnswer;
   final AnswerChoice correctAnswer;
   final bool revealAnswer;
+  final bool revealUnansweredAnswer;
   final bool canChangeAnswer;
   final ValueChanged<AnswerChoice> onChoose;
   final bool compact;
@@ -1212,6 +1339,7 @@ class _AnswerButtonPair extends StatelessWidget {
               selectedAnswer: selectedAnswer,
               correctAnswer: correctAnswer,
               revealAnswer: revealAnswer,
+              revealUnansweredAnswer: revealUnansweredAnswer,
               canChangeAnswer: canChangeAnswer,
               onTap: () => onChoose(choice),
               height: compact ? 56 : 72,
@@ -1240,6 +1368,7 @@ class _AnswerButton extends StatelessWidget {
     required this.selectedAnswer,
     required this.correctAnswer,
     required this.revealAnswer,
+    required this.revealUnansweredAnswer,
     required this.canChangeAnswer,
     required this.onTap,
     this.height = 72,
@@ -1249,6 +1378,7 @@ class _AnswerButton extends StatelessWidget {
   final AnswerChoice? selectedAnswer;
   final AnswerChoice correctAnswer;
   final bool revealAnswer;
+  final bool revealUnansweredAnswer;
   final bool canChangeAnswer;
   final VoidCallback onTap;
   final double height;
@@ -1258,8 +1388,10 @@ class _AnswerButton extends StatelessWidget {
     final answered = selectedAnswer != null;
     final selected = selectedAnswer == choice;
     final isCorrectChoice = correctAnswer == choice;
+    final revealCorrectChoice =
+        revealAnswer && isCorrectChoice && (answered || revealUnansweredAnswer);
     final surface = LiquidColors.glassFill(context, strong: true);
-    final borderColor = revealAnswer && isCorrectChoice
+    final borderColor = revealCorrectChoice
         ? LiquidColors.success
         : !answered
         ? LiquidColors.primary.withValues(
@@ -1274,7 +1406,7 @@ class _AnswerButton extends StatelessWidget {
         : selected
         ? LiquidColors.danger
         : LiquidColors.hairline(context);
-    final background = revealAnswer && isCorrectChoice
+    final background = revealCorrectChoice
         ? LiquidColors.success.withValues(alpha: 0.12)
         : !answered
         ? surface
@@ -1391,6 +1523,7 @@ class _SidePanel extends StatelessWidget {
     required this.question,
     required this.selectedAnswer,
     required this.revealAnswer,
+    required this.revealUnansweredAnswer,
     required this.showRuby,
     required this.translations,
     required this.retryTranslations,
@@ -1405,6 +1538,7 @@ class _SidePanel extends StatelessWidget {
   final DriverQuestion question;
   final Map<int, AnswerChoice>? selectedAnswer;
   final bool revealAnswer;
+  final bool revealUnansweredAnswer;
   final bool showRuby;
   final Map<TranslationLanguage, _TranslationState> translations;
   final Map<TranslationLanguage, VoidCallback> retryTranslations;
@@ -1472,6 +1606,7 @@ class _SidePanel extends StatelessWidget {
           question: question,
           selectedAnswer: selectedAnswer,
           revealAnswer: revealAnswer,
+          revealUnansweredAnswer: revealUnansweredAnswer,
           showRuby: showRuby,
           translations: translations,
           retryTranslations: retryTranslations,
@@ -1489,6 +1624,7 @@ class _QuestionDetailPanel extends StatelessWidget {
     required this.question,
     required this.selectedAnswer,
     required this.revealAnswer,
+    required this.revealUnansweredAnswer,
     required this.showRuby,
     required this.translations,
     required this.retryTranslations,
@@ -1500,6 +1636,7 @@ class _QuestionDetailPanel extends StatelessWidget {
   final DriverQuestion question;
   final Map<int, AnswerChoice>? selectedAnswer;
   final bool revealAnswer;
+  final bool revealUnansweredAnswer;
   final bool showRuby;
   final Map<TranslationLanguage, _TranslationState> translations;
   final Map<TranslationLanguage, VoidCallback> retryTranslations;
@@ -1536,6 +1673,7 @@ class _QuestionDetailPanel extends StatelessWidget {
             question: question,
             selectedAnswer: selectedAnswer,
             revealAnswer: revealAnswer,
+            revealUnansweredAnswer: revealUnansweredAnswer,
             showRuby: showRuby,
             translations: translations,
             retryTranslations: retryTranslations,
@@ -1552,6 +1690,7 @@ class _ResultPanel extends StatelessWidget {
     required this.question,
     required this.selectedAnswer,
     required this.revealAnswer,
+    required this.revealUnansweredAnswer,
     required this.showRuby,
     required this.translations,
     required this.retryTranslations,
@@ -1560,6 +1699,7 @@ class _ResultPanel extends StatelessWidget {
   final DriverQuestion question;
   final Map<int, AnswerChoice>? selectedAnswer;
   final bool revealAnswer;
+  final bool revealUnansweredAnswer;
   final bool showRuby;
   final Map<TranslationLanguage, _TranslationState> translations;
   final Map<TranslationLanguage, VoidCallback> retryTranslations;
@@ -1567,7 +1707,7 @@ class _ResultPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final response = selectedAnswer ?? const <int, AnswerChoice>{};
-    if (response.isEmpty && !revealAnswer) {
+    if (response.isEmpty && !revealUnansweredAnswer) {
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -1967,6 +2107,7 @@ class _AnswerSheetCard extends StatelessWidget {
     required this.answers,
     required this.currentIndex,
     required this.revealAnswer,
+    required this.revealUnansweredAnswer,
     required this.onJumpToQuestion,
   });
 
@@ -1974,6 +2115,7 @@ class _AnswerSheetCard extends StatelessWidget {
   final Map<int, Map<int, AnswerChoice>> answers;
   final int currentIndex;
   final bool revealAnswer;
+  final bool revealUnansweredAnswer;
   final ValueChanged<int> onJumpToQuestion;
 
   @override
@@ -2021,6 +2163,7 @@ class _AnswerSheetCard extends StatelessWidget {
                     answer: answers[i],
                     question: questions[i],
                     revealAnswer: revealAnswer,
+                    revealUnansweredAnswer: revealUnansweredAnswer,
                     onTap: () => onJumpToQuestion(i),
                   ),
               ],
@@ -2039,6 +2182,7 @@ class _AnswerSheetCell extends StatelessWidget {
     required this.answer,
     required this.question,
     required this.revealAnswer,
+    required this.revealUnansweredAnswer,
     required this.onTap,
   });
 
@@ -2047,6 +2191,7 @@ class _AnswerSheetCell extends StatelessWidget {
   final Map<int, AnswerChoice>? answer;
   final DriverQuestion question;
   final bool revealAnswer;
+  final bool revealUnansweredAnswer;
   final VoidCallback onTap;
 
   @override
@@ -2055,7 +2200,9 @@ class _AnswerSheetCell extends StatelessWidget {
     final isCorrect = answered && question.isResponseCorrect(answer!);
     final colorScheme = Theme.of(context).colorScheme;
     final surface = colorScheme.surface;
-    final background = revealAnswer && !answered
+    final revealMissingAnswer =
+        revealAnswer && revealUnansweredAnswer && !answered;
+    final background = revealMissingAnswer
         ? LiquidColors.danger.withValues(alpha: 0.12)
         : !answered
         ? surface
@@ -2066,7 +2213,7 @@ class _AnswerSheetCell extends StatelessWidget {
         : LiquidColors.danger.withValues(alpha: 0.12);
     final borderColor = isCurrent
         ? colorScheme.onSurface
-        : revealAnswer && !answered
+        : revealMissingAnswer
         ? LiquidColors.danger
         : !answered
         ? LiquidColors.hairline(context)
@@ -2075,7 +2222,7 @@ class _AnswerSheetCell extends StatelessWidget {
         : isCorrect
         ? LiquidColors.success
         : LiquidColors.danger;
-    final textColor = revealAnswer && !answered
+    final textColor = revealMissingAnswer
         ? LiquidColors.danger
         : !answered
         ? colorScheme.onSurface
